@@ -34,19 +34,76 @@ type LogWriter struct {
 	offset    int64
 	maxBytes  int64
 	truncated bool
+	failed    error
 }
 
 func NewLogWriter(path string, maxBytes int64) (*LogWriter, error) {
+	info, _ := os.Stat(path)
+	existsAndNonEmpty := info != nil && info.Size() > 0
+
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("exec: open log: %w", err)
 	}
-	info, err := f.Stat()
+
+	fileInfo, err := f.Stat()
 	if err != nil {
 		f.Close()
 		return nil, fmt.Errorf("exec: stat log: %w", err)
 	}
-	return &LogWriter{f: f, offset: info.Size(), maxBytes: maxBytes}, nil
+
+	w := &LogWriter{f: f, offset: fileInfo.Size(), maxBytes: maxBytes}
+
+	if existsAndNonEmpty {
+		if err := w.repairTornTail(); err != nil {
+			f.Close()
+			return nil, fmt.Errorf("exec: repair torn tail: %w", err)
+		}
+	}
+
+	return w, nil
+}
+
+func (w *LogWriter) repairTornTail() error {
+	path := w.f.Name()
+	rf, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("open for read: %w", err)
+	}
+	defer rf.Close()
+
+	var (
+		lastBoundary int64 = 0
+		offset       int64 = 0
+		header             = make([]byte, headerSize)
+	)
+
+	for {
+		if _, err := io.ReadFull(rf, header); err != nil {
+			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+				break
+			}
+			return fmt.Errorf("read header: %w", err)
+		}
+
+		n := binary.BigEndian.Uint32(header[1:])
+		data := make([]byte, n)
+		if _, err := io.ReadFull(rf, data); err != nil {
+			break
+		}
+
+		offset += int64(headerSize) + int64(n)
+		lastBoundary = offset
+	}
+
+	if lastBoundary < w.offset {
+		if err := w.f.Truncate(lastBoundary); err != nil {
+			return fmt.Errorf("truncate: %w", err)
+		}
+		w.offset = lastBoundary
+	}
+
+	return nil
 }
 
 func (w *LogWriter) Append(stream LogStream, data []byte) (int64, error) {
@@ -57,9 +114,14 @@ func (w *LogWriter) Append(stream LogStream, data []byte) (int64, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	if w.failed != nil {
+		return w.offset, w.failed
+	}
+
 	if w.truncated {
 		return w.offset, nil
 	}
+
 	size := int64(headerSize + len(data))
 	if w.offset+size > w.maxBytes {
 		w.truncated = true
@@ -71,9 +133,15 @@ func (w *LogWriter) Append(stream LogStream, data []byte) (int64, error) {
 	binary.BigEndian.PutUint32(buf[1:headerSize], uint32(len(data)))
 	copy(buf[headerSize:], data)
 
-	if _, err := w.f.Write(buf); err != nil {
-		return w.offset, fmt.Errorf("exec: write log: %w", err)
+	n, err := w.f.Write(buf)
+	if err != nil || n != len(buf) {
+		if info, statErr := w.f.Stat(); statErr == nil {
+			w.offset = info.Size()
+		}
+		w.failed = ErrWriterFailed
+		return w.offset, ErrWriterFailed
 	}
+
 	w.offset += size
 	return w.offset, nil
 }
@@ -125,7 +193,10 @@ func ReadRecords(path string, from int64) ([]Record, error) {
 		n := binary.BigEndian.Uint32(header[1:])
 		data := make([]byte, n)
 		if _, err := io.ReadFull(f, data); err != nil {
-			return records, nil
+			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+				return records, nil
+			}
+			return nil, fmt.Errorf("exec: read log data: %w", err)
 		}
 		offset += int64(headerSize) + int64(n)
 		records = append(records, Record{Stream: LogStream(header[0]), Data: data, Offset: offset})

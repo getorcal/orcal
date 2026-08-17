@@ -2,6 +2,9 @@ package exec
 
 import (
 	"bytes"
+	"encoding/binary"
+	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -115,5 +118,82 @@ func TestGapRecordRoundTrips(t *testing.T) {
 	}
 	if len(records[0].Data) != 0 {
 		t.Errorf("Data = %q, want empty", records[0].Data)
+	}
+}
+
+func TestTornTailIsRepairedOnReopen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "exec.log")
+	w, _ := NewLogWriter(path, 1024)
+	w.Append(LogStdout, []byte("first"))
+	w.Append(LogStdout, []byte("second"))
+	w.Close()
+
+	f, _ := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0o600)
+	buf := make([]byte, 5)
+	buf[0] = byte(LogStdout)
+	binary.BigEndian.PutUint32(buf[1:], 100)
+	f.Write(buf)
+	f.Close()
+
+	w2, _ := NewLogWriter(path, 1024)
+	w2.Append(LogStdout, []byte("third"))
+	w2.Close()
+
+	records, _ := ReadRecords(path, 0)
+	if len(records) != 3 {
+		t.Fatalf("len(records) = %d, want 3", len(records))
+	}
+	if !bytes.Equal(records[0].Data, []byte("first")) || !bytes.Equal(records[1].Data, []byte("second")) || !bytes.Equal(records[2].Data, []byte("third")) {
+		t.Errorf("records = %+v, want [first second third]", records)
+	}
+}
+
+func TestExactBoundaryTruncation(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "exec.log")
+	w, _ := NewLogWriter(path, 20)
+	defer w.Close()
+
+	w.Append(LogStdout, []byte("12345"))
+	if w.Truncated() {
+		t.Fatal("Truncated() = true after first append (10 bytes), want false")
+	}
+
+	w.Append(LogStdout, []byte("xxxxx"))
+	if w.Truncated() {
+		t.Fatal("Truncated() = true at exact boundary (10+10=20), want false")
+	}
+
+	w.Append(LogStdout, []byte("y"))
+	if !w.Truncated() {
+		t.Fatal("Truncated() = false after exceeding cap, want true")
+	}
+
+	records, _ := ReadRecords(path, 0)
+	if len(records) != 2 {
+		t.Errorf("len(records) = %d, want 2 (third append dropped)", len(records))
+	}
+}
+
+func TestFailedWriterRefusesFurtherAppends(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "exec.log")
+	w, _ := NewLogWriter(path, 1024)
+	w.Append(LogStdout, []byte("ok"))
+
+	w.Close()
+	os.Remove(path)
+	os.Mkdir(path, 0o755)
+
+	_, err := w.Append(LogStdout, []byte("test"))
+	if err == nil {
+		t.Fatal("Append() error = nil after path becomes dir, want error")
+	}
+	if !errors.Is(err, ErrWriterFailed) {
+		t.Errorf("error = %v, want ErrWriterFailed", err)
+	}
+
+	_, err2 := w.Append(LogStdout, []byte("test2"))
+	if !errors.Is(err2, ErrWriterFailed) {
+		t.Errorf("second Append() error = %v, want ErrWriterFailed", err2)
 	}
 }
