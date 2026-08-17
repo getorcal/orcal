@@ -149,4 +149,71 @@ func TestLastCreateSpecReturnsMostRecentSpec(t *testing.T) {
 	}
 }
 
+func TestStartOnDestroyedContainerReturnsErrNotFound(t *testing.T) {
+	f := New()
+	ctx := context.Background()
+	id, _ := f.Create(ctx, runtime.CreateSpec{Image: "alpine"})
+	if err := f.Destroy(ctx, id); err != nil {
+		t.Fatalf("Destroy() error = %v", err)
+	}
+
+	if err := f.Start(ctx, id); !errors.Is(err, runtime.ErrNotFound) {
+		t.Errorf("Start() error = %v, want ErrNotFound", err)
+	}
+
+	st, _ := f.Inspect(ctx, id)
+	if st.State != runtime.ContainerGone {
+		t.Errorf("state after failed start = %s, want gone", st.State)
+	}
+}
+
+func TestDestroyIsIdempotent(t *testing.T) {
+	f := New()
+	ctx := context.Background()
+	id, _ := f.Create(ctx, runtime.CreateSpec{Image: "alpine"})
+
+	if err := f.Destroy(ctx, id); err != nil {
+		t.Fatalf("first Destroy() error = %v", err)
+	}
+	if err := f.Destroy(ctx, id); err != nil {
+		t.Fatalf("second Destroy() error = %v", err)
+	}
+
+	st, _ := f.Inspect(ctx, id)
+	if st.State != runtime.ContainerGone {
+		t.Errorf("state after double destroy = %s, want gone", st.State)
+	}
+}
+
+func TestExecOnUnstartedContainerReturnsErrConflict(t *testing.T) {
+	f := New()
+	ctx := context.Background()
+	id, _ := f.Create(ctx, runtime.CreateSpec{Image: "alpine"})
+
+	_, err := f.Exec(ctx, id, runtime.ExecSpec{Command: []string{"true"}})
+	if !errors.Is(err, runtime.ErrConflict) {
+		t.Errorf("Exec() error = %v, want ErrConflict", err)
+	}
+}
+
+func TestLastCreateSpecUnaffectedByFailedCreate(t *testing.T) {
+	f := New()
+	ctx := context.Background()
+
+	first := runtime.CreateSpec{SandboxID: "sb-1", Image: "alpine"}
+	if _, err := f.Create(ctx, first); err != nil {
+		t.Fatalf("first Create() error = %v", err)
+	}
+
+	f.SetCreateError(errors.New("boom"))
+	if _, err := f.Create(ctx, runtime.CreateSpec{SandboxID: "sb-2", Image: "busybox"}); err == nil {
+		t.Fatal("second Create() error = nil, want error")
+	}
+
+	got := f.LastCreateSpec()
+	if !reflect.DeepEqual(got, first) {
+		t.Errorf("LastCreateSpec() = %+v, want %+v", got, first)
+	}
+}
+
 var _ runtime.Runtime = (*Fake)(nil)

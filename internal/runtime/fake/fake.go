@@ -67,32 +67,39 @@ func (f *Fake) LastCreateSpec() runtime.CreateSpec {
 func (f *Fake) Create(ctx context.Context, spec runtime.CreateSpec) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.lastCreateSpec = spec
 	if f.createErr != nil {
 		return "", f.createErr
 	}
+	f.lastCreateSpec = spec
 	id := uuid.NewString()
 	f.containers[id] = &container{spec: spec, state: runtime.ContainerStopped}
 	return id, nil
 }
 
 func (f *Fake) Start(ctx context.Context, id string) error {
-	return f.setState(id, runtime.ContainerRunning)
+	return f.transition(id, runtime.ContainerRunning)
 }
 
 func (f *Fake) Stop(ctx context.Context, id string, timeout time.Duration) error {
-	return f.setState(id, runtime.ContainerStopped)
+	return f.transition(id, runtime.ContainerStopped)
 }
 
 func (f *Fake) Destroy(ctx context.Context, id string) error {
-	return f.setState(id, runtime.ContainerGone)
-}
-
-func (f *Fake) setState(id string, state runtime.ContainerState) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	c, ok := f.containers[id]
 	if !ok {
+		return fmt.Errorf("%w: container %s", runtime.ErrNotFound, id)
+	}
+	c.state = runtime.ContainerGone
+	return nil
+}
+
+func (f *Fake) transition(id string, state runtime.ContainerState) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c, ok := f.containers[id]
+	if !ok || c.state == runtime.ContainerGone {
 		return fmt.Errorf("%w: container %s", runtime.ErrNotFound, id)
 	}
 	c.state = state
