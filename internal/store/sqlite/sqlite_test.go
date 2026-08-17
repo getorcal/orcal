@@ -170,6 +170,69 @@ func TestListFiltersByLabel(t *testing.T) {
 	}
 }
 
+func TestListFiltersByDottedLabelKey(t *testing.T) {
+	ctx := context.Background()
+	repo := newStore(t).Sandboxes()
+	s := sample()
+	s.Labels = map[string]string{"app.kubernetes.io/name": "core"}
+	if err := repo.Create(ctx, s); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	got, err := repo.List(ctx, sandbox.Filter{Labels: map[string]string{"app.kubernetes.io/name": "core"}, Limit: 10})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(got) != 1 || got[0].ID != s.ID {
+		t.Errorf("List(app.kubernetes.io/name=core) = %+v, want %s", got, s.ID)
+	}
+}
+
+func TestListFiltersByQuotedLabelKey(t *testing.T) {
+	ctx := context.Background()
+	repo := newStore(t).Sandboxes()
+	s := sample()
+	s.Labels = map[string]string{`weird"key`: "v"}
+	if err := repo.Create(ctx, s); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	got, err := repo.List(ctx, sandbox.Filter{Labels: map[string]string{`weird"key`: "v"}, Limit: 10})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(got) != 1 || got[0].ID != s.ID {
+		t.Errorf(`List(weird"key=v) = %+v, want %s`, got, s.ID)
+	}
+}
+
+func TestListLabelFilterDoesNotOverMatch(t *testing.T) {
+	ctx := context.Background()
+	repo := newStore(t).Sandboxes()
+
+	wrongValue := sample()
+	wrongValue.Labels = map[string]string{"team": "growth"}
+	if err := repo.Create(ctx, wrongValue); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	missingKey := sample()
+	missingKey.ID = "0192f3a4-5b6c-7d8e-9f01-23456789abce"
+	missingKey.Name = "other-agent"
+	missingKey.Labels = map[string]string{"other": "value"}
+	if err := repo.Create(ctx, missingKey); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	got, err := repo.List(ctx, sandbox.Filter{Labels: map[string]string{"team": "core"}, Limit: 10})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("List(team=core) = %+v, want no matches", got)
+	}
+}
+
 func TestListPaginatesByCursor(t *testing.T) {
 	ctx := context.Background()
 	repo := newStore(t).Sandboxes()

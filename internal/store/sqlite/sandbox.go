@@ -75,8 +75,8 @@ func (r *sandboxRepo) List(ctx context.Context, f sandbox.Filter) ([]*sandbox.Sa
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			query += ` AND json_extract(labels, ?) = ?`
-			args = append(args, "$."+k, f.Labels[k])
+			query += ` AND EXISTS (SELECT 1 FROM json_each(labels) WHERE json_each.key = ? AND json_each.value = ?)`
+			args = append(args, k, f.Labels[k])
 		}
 	}
 	if f.Cursor != "" {
