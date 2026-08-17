@@ -1,5 +1,7 @@
 package sandbox
 
+import "slices"
+
 type State string
 
 const (
@@ -21,10 +23,5 @@ var transitions = map[State][]State{
 }
 
 func CanTransition(from, to State) bool {
-	for _, s := range transitions[from] {
-		if s == to {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(transitions[from], to)
 }

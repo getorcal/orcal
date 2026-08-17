@@ -44,7 +44,7 @@ func NewService(repo Repo, rt runtime.Runtime, defaults Resources, network strin
 
 func (s *Service) Create(ctx context.Context, opts CreateOptions) (*Sandbox, error) {
 	if opts.Image == "" {
-		return nil, fmt.Errorf("%w: image is required", ErrInvalidName)
+		return nil, fmt.Errorf("%w: image is required", ErrInvalidImage)
 	}
 	if opts.Name != "" {
 		if err := ValidateName(opts.Name); err != nil {
@@ -82,6 +82,10 @@ func (s *Service) Create(ctx context.Context, opts CreateOptions) (*Sandbox, err
 	if sb.Labels == nil {
 		sb.Labels = map[string]string{}
 	}
+
+	unlock := s.locks.lock(sb.ID)
+	defer unlock()
+
 	if err := s.repo.Create(ctx, sb); err != nil {
 		return nil, err
 	}

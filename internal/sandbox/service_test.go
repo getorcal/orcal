@@ -3,8 +3,11 @@ package sandbox_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/getorcal/orcal/internal/runtime"
 	"github.com/getorcal/orcal/internal/runtime/fake"
@@ -22,6 +25,62 @@ func newService(t *testing.T) (*sandbox.Service, *fake.Fake) {
 	f := fake.New()
 	defaults := sandbox.Resources{CPUMillis: 1000, MemoryBytes: 1 << 30, PidsLimit: 512}
 	return sandbox.NewService(st.Sandboxes(), f, defaults, "orcal"), f
+}
+
+func newServiceWithRuntime(t *testing.T, rt runtime.Runtime) *sandbox.Service {
+	t.Helper()
+	st, err := sqlite.Open(filepath.Join(t.TempDir(), "orcal.db"))
+	if err != nil {
+		t.Fatalf("sqlite.Open() error = %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+	defaults := sandbox.Resources{CPUMillis: 1000, MemoryBytes: 1 << 30, PidsLimit: 512}
+	return sandbox.NewService(st.Sandboxes(), rt, defaults, "orcal")
+}
+
+type erroringRuntime struct {
+	*fake.Fake
+	startErr error
+	stopErr  error
+}
+
+func (r *erroringRuntime) Start(ctx context.Context, id string) error {
+	if r.startErr != nil {
+		return r.startErr
+	}
+	return r.Fake.Start(ctx, id)
+}
+
+func (r *erroringRuntime) Stop(ctx context.Context, id string, timeout time.Duration) error {
+	if r.stopErr != nil {
+		return r.stopErr
+	}
+	return r.Fake.Stop(ctx, id, timeout)
+}
+
+type spyRuntime struct {
+	*fake.Fake
+	mu     sync.Mutex
+	starts []string
+}
+
+func (r *spyRuntime) Create(ctx context.Context, spec runtime.CreateSpec) (string, error) {
+	id, err := r.Fake.Create(ctx, spec)
+	time.Sleep(20 * time.Millisecond)
+	return id, err
+}
+
+func (r *spyRuntime) Start(ctx context.Context, id string) error {
+	r.mu.Lock()
+	r.starts = append(r.starts, id)
+	r.mu.Unlock()
+	return r.Fake.Start(ctx, id)
+}
+
+func (r *spyRuntime) recordedStarts() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]string(nil), r.starts...)
 }
 
 func TestCreateStartsSandboxAndReturnsRunning(t *testing.T) {
@@ -75,13 +134,16 @@ func TestCreateKeepsExplicitResources(t *testing.T) {
 func TestCreatePassesHardeningRelevantSpecToRuntime(t *testing.T) {
 	svc, f := newService(t)
 
-	svc.Create(context.Background(), sandbox.CreateOptions{
+	created, _ := svc.Create(context.Background(), sandbox.CreateOptions{
 		Image:     "alpine",
 		Env:       map[string]string{"A": "1"},
 		Resources: sandbox.Resources{CPUMillis: 2000, MemoryBytes: 2 << 30, PidsLimit: 128},
 	})
 
 	spec := f.LastCreateSpec()
+	if spec.SandboxID != created.ID {
+		t.Errorf("spec.SandboxID = %q, want %q", spec.SandboxID, created.ID)
+	}
 	if spec.Image != "alpine" {
 		t.Errorf("spec.Image = %q, want alpine", spec.Image)
 	}
@@ -93,6 +155,18 @@ func TestCreatePassesHardeningRelevantSpecToRuntime(t *testing.T) {
 	}
 	if spec.Env["A"] != "1" {
 		t.Errorf("spec.Env = %v, want A=1", spec.Env)
+	}
+}
+
+func TestCreateRejectsMissingImage(t *testing.T) {
+	svc, _ := newService(t)
+
+	_, err := svc.Create(context.Background(), sandbox.CreateOptions{Name: "my-agent"})
+	if !errors.Is(err, sandbox.ErrInvalidImage) {
+		t.Errorf("Create() error = %v, want ErrInvalidImage", err)
+	}
+	if errors.Is(err, sandbox.ErrInvalidName) {
+		t.Errorf("Create() error = %v, must not also satisfy ErrInvalidName", err)
 	}
 }
 
@@ -126,6 +200,45 @@ func TestCreateMarksSandboxErroredWhenRuntimeFails(t *testing.T) {
 	}
 
 	s, getErr := svc.Get(context.Background(), "doomed")
+	if getErr != nil {
+		t.Fatalf("Get() error = %v, want the errored record to be readable", getErr)
+	}
+	if s.State != sandbox.StateError {
+		t.Errorf("State = %s, want error", s.State)
+	}
+}
+
+func TestCreateMarksSandboxErroredWhenStartFails(t *testing.T) {
+	rt := &erroringRuntime{Fake: fake.New(), startErr: runtime.ErrUnavailable}
+	svc := newServiceWithRuntime(t, rt)
+
+	_, err := svc.Create(context.Background(), sandbox.CreateOptions{Name: "doomed", Image: "alpine"})
+	if err == nil {
+		t.Fatal("Create() error = nil, want start failure")
+	}
+
+	s, getErr := svc.Get(context.Background(), "doomed")
+	if getErr != nil {
+		t.Fatalf("Get() error = %v, want the errored record to be readable", getErr)
+	}
+	if s.State != sandbox.StateError {
+		t.Errorf("State = %s, want error", s.State)
+	}
+}
+
+func TestStopMarksSandboxErroredOnRuntimeFailure(t *testing.T) {
+	rt := &erroringRuntime{Fake: fake.New()}
+	svc := newServiceWithRuntime(t, rt)
+	ctx := context.Background()
+	svc.Create(ctx, sandbox.CreateOptions{Name: "my-agent", Image: "alpine"})
+
+	rt.stopErr = runtime.ErrUnavailable
+	_, err := svc.Stop(ctx, "my-agent")
+	if err == nil {
+		t.Fatal("Stop() error = nil, want runtime failure")
+	}
+
+	s, getErr := svc.Get(ctx, "my-agent")
 	if getErr != nil {
 		t.Fatalf("Get() error = %v, want the errored record to be readable", getErr)
 	}
@@ -237,5 +350,51 @@ func TestRuntimeIDRejectsStoppedSandbox(t *testing.T) {
 
 	if _, err := svc.RuntimeID(ctx, created.ID); !errors.Is(err, sandbox.ErrInvalidState) {
 		t.Errorf("RuntimeID() on stopped error = %v, want ErrInvalidState", err)
+	}
+}
+
+func TestCreateSerializesAgainstConcurrentStart(t *testing.T) {
+	for i := range 50 {
+		st, err := sqlite.Open(filepath.Join(t.TempDir(), "orcal.db"))
+		if err != nil {
+			t.Fatalf("sqlite.Open() error = %v", err)
+		}
+		rt := &spyRuntime{Fake: fake.New()}
+		defaults := sandbox.Resources{CPUMillis: 1000, MemoryBytes: 1 << 30, PidsLimit: 512}
+		svc := sandbox.NewService(st.Sandboxes(), rt, defaults, "orcal")
+		ctx := context.Background()
+		name := fmt.Sprintf("race-%d", i)
+
+		done := make(chan struct{})
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			svc.Create(ctx, sandbox.CreateOptions{Name: name, Image: "alpine"})
+			close(done)
+		}()
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-done:
+					return
+				default:
+				}
+				list, err := svc.List(ctx, sandbox.Filter{})
+				if err != nil || len(list) == 0 {
+					continue
+				}
+				svc.Start(ctx, list[0].ID)
+			}
+		}()
+		wg.Wait()
+
+		for _, id := range rt.recordedStarts() {
+			if id == "" {
+				t.Fatalf("iteration %d: rt.Start invoked with empty runtime id", i)
+			}
+		}
+		st.Close()
 	}
 }
