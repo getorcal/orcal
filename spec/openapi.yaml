@@ -1,0 +1,315 @@
+openapi: 3.0.3
+info:
+  title: Orcal Sandbox API
+  version: "1.0.0"
+  description: The Open Sandbox Standard reference API.
+servers:
+  - url: /v1
+paths:
+  /healthz:
+    get:
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: Service is live
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string }
+  /version:
+    get:
+      operationId: getVersion
+      security: []
+      responses:
+        "200":
+          description: Build and protocol version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Version" }
+  /sandboxes:
+    get:
+      operationId: listSandboxes
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: state, in: query, schema: { type: string } }
+        - { name: label, in: query, schema: { type: array, items: { type: string } }, style: form, explode: true }
+      responses:
+        "200":
+          description: A page of sandboxes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SandboxList" }
+        "401": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createSandbox
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateSandboxRequest" }
+      responses:
+        "201":
+          description: Sandbox created and running
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sandbox" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /sandboxes/{ref}:
+    parameters:
+      - { name: ref, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getSandbox
+      responses:
+        "200":
+          description: The sandbox
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sandbox" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: destroySandbox
+      responses:
+        "200":
+          description: The destroyed sandbox
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sandbox" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /sandboxes/{ref}/start:
+    parameters:
+      - { name: ref, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: startSandbox
+      responses:
+        "200":
+          description: The started sandbox
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sandbox" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /sandboxes/{ref}/stop:
+    parameters:
+      - { name: ref, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: stopSandbox
+      responses:
+        "200":
+          description: The stopped sandbox
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sandbox" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /sandboxes/{ref}/execs:
+    parameters:
+      - { name: ref, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listExecs
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
+        - { name: cursor, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: A page of execs
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExecList" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createExec
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateExecRequest" }
+      responses:
+        "201":
+          description: Exec started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Exec" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /execs/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getExec
+      responses:
+        "200":
+          description: The exec
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Exec" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /execs/{id}/output:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+      - { name: from, in: query, schema: { type: integer, format: int64, minimum: 0 } }
+    get:
+      operationId: getExecOutput
+      responses:
+        "200":
+          description: Server-sent event stream of output frames
+          content:
+            text/event-stream:
+              schema: { type: string }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    Version:
+      type: object
+      required: [version, api_versions]
+      properties:
+        version: { type: string }
+        api_versions:
+          type: array
+          items: { type: string }
+    Resources:
+      type: object
+      required: [cpu_millis, memory_bytes, pids_limit]
+      properties:
+        cpu_millis: { type: integer }
+        memory_bytes: { type: integer, format: int64 }
+        pids_limit: { type: integer }
+    Sandbox:
+      type: object
+      required: [id, image, state, runtime, resources, created_at, updated_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        image: { type: string }
+        state:
+          type: string
+          enum: [creating, running, stopped, destroying, destroyed, error]
+        runtime: { type: string }
+        resources: { $ref: "#/components/schemas/Resources" }
+        env:
+          type: object
+          additionalProperties: { type: string }
+        labels:
+          type: object
+          additionalProperties: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    SandboxList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Sandbox" }
+        next_cursor: { type: string }
+    CreateSandboxRequest:
+      type: object
+      required: [image]
+      properties:
+        name: { type: string }
+        image: { type: string }
+        cpu_millis: { type: integer }
+        memory_bytes: { type: integer, format: int64 }
+        pids_limit: { type: integer }
+        env:
+          type: object
+          additionalProperties: { type: string }
+        labels:
+          type: object
+          additionalProperties: { type: string }
+    CreateExecRequest:
+      type: object
+      required: [command]
+      properties:
+        command:
+          type: array
+          items: { type: string }
+        env:
+          type: object
+          additionalProperties: { type: string }
+        working_dir: { type: string }
+        user: { type: string }
+    Exec:
+      type: object
+      required: [id, sandbox_id, command, state, output_bytes, truncated, started_at]
+      properties:
+        id: { type: string }
+        sandbox_id: { type: string }
+        command:
+          type: array
+          items: { type: string }
+        env:
+          type: object
+          additionalProperties: { type: string }
+        working_dir: { type: string }
+        user: { type: string }
+        state:
+          type: string
+          enum: [running, exited, failed]
+        exit_code: { type: integer, nullable: true }
+        output_bytes: { type: integer, format: int64 }
+        truncated: { type: boolean }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time, nullable: true }
+    ExecList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Exec" }
+        next_cursor: { type: string }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { $ref: "#/components/schemas/ErrorBody" }
+    ErrorBody:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum:
+            - invalid_request
+            - unauthorized
+            - sandbox_not_found
+            - exec_not_found
+            - name_taken
+            - invalid_state
+            - resource_exhausted
+            - runtime_unavailable
+            - internal_error
+        message: { type: string }
+        details:
+          type: object
+          additionalProperties: true
+security:
+  - bearerAuth: []

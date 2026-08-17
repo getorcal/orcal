@@ -1,4 +1,4 @@
-.PHONY: build test test-docker lint generate
+.PHONY: build test test-docker lint generate verify-generate
 
 build:
 	go build -o dist/orcald ./cmd/orcald
@@ -12,3 +12,6 @@ test-docker:
 
 generate:
 	go generate ./...
+
+verify-generate: generate
+	git diff --exit-code internal/apigen
