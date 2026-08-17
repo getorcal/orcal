@@ -99,7 +99,7 @@ func (s *Service) Create(ctx context.Context, opts CreateOptions) (*Exec, error)
 	e.RuntimeExecID = session.ID()
 	if err := s.repo.Update(ctx, e); err != nil {
 		session.Close()
-		return nil, err
+		return nil, s.markFailed(ctx, e, err)
 	}
 
 	s.wg.Add(1)
@@ -126,7 +126,6 @@ func (s *Service) supervise(execID string, session runtime.Session) {
 
 	writer, err := NewLogWriter(s.LogPath(execID), s.maxBytes)
 	if err != nil {
-		session.Wait(ctx)
 		s.finish(ctx, execID, nil, 0, false, StateFailed)
 		s.bcast.Notify(execID)
 		return
@@ -160,11 +159,8 @@ func (s *Service) supervise(execID string, session runtime.Session) {
 }
 
 func outcomeFor(appendFailed bool, code int, waitErr error) (State, *int) {
-	if waitErr != nil {
+	if waitErr != nil || appendFailed {
 		return StateFailed, nil
-	}
-	if appendFailed {
-		return StateFailed, &code
 	}
 	return StateExited, &code
 }

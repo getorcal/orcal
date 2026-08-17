@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -24,7 +25,54 @@ func (s stubLookup) RuntimeID(ctx context.Context, sandboxID string) (string, er
 	return s.runtimeID, s.err
 }
 
-func newService(t *testing.T, lookup exec.SandboxLookup, f *fake.Fake, maxBytes int64) *exec.Service {
+type wrapRuntime struct {
+	runtime.Runtime
+	wrap func(runtime.Session) runtime.Session
+}
+
+func (w wrapRuntime) Exec(ctx context.Context, runtimeID string, spec runtime.ExecSpec) (runtime.Session, error) {
+	sess, err := w.Runtime.Exec(ctx, runtimeID, spec)
+	if err != nil {
+		return nil, err
+	}
+	return w.wrap(sess), nil
+}
+
+type blockingSession struct {
+	runtime.Session
+	release chan struct{}
+	once    sync.Once
+}
+
+func (s *blockingSession) Recv() (runtime.Frame, error) {
+	s.once.Do(func() { <-s.release })
+	return s.Session.Recv()
+}
+
+type failingWaitSession struct {
+	runtime.Session
+	err error
+}
+
+func (s *failingWaitSession) Wait(ctx context.Context) (int, error) {
+	return 0, s.err
+}
+
+type failingUpdateRepo struct {
+	exec.Repo
+	failOn int
+	calls  int
+}
+
+func (r *failingUpdateRepo) Update(ctx context.Context, e *exec.Exec) error {
+	r.calls++
+	if r.calls == r.failOn {
+		return errors.New("simulated update failure")
+	}
+	return r.Repo.Update(ctx, e)
+}
+
+func newStore(t *testing.T) *sqlite.Store {
 	t.Helper()
 	st, err := sqlite.Open(filepath.Join(t.TempDir(), "orcal.db"))
 	if err != nil {
@@ -47,8 +95,13 @@ func newService(t *testing.T, lookup exec.SandboxLookup, f *fake.Fake, maxBytes 
 	if err := st.Sandboxes().Create(context.Background(), seed); err != nil {
 		t.Fatalf("seed sandbox Create() error = %v", err)
 	}
+	return st
+}
 
-	svc, err := exec.NewService(st.Execs(), lookup, f, t.TempDir(), maxBytes)
+func newService(t *testing.T, lookup exec.SandboxLookup, rt runtime.Runtime, maxBytes int64) *exec.Service {
+	t.Helper()
+	st := newStore(t)
+	svc, err := exec.NewService(st.Execs(), lookup, rt, t.TempDir(), maxBytes)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -163,6 +216,9 @@ func TestTruncationIsRecordedWhenOutputExceedsCap(t *testing.T) {
 	if !got.Truncated {
 		t.Error("Truncated = false, want true once the cap is hit")
 	}
+	if got.State != exec.StateExited {
+		t.Errorf("State = %s, want exited (truncation is a recorded condition, not a failure)", got.State)
+	}
 	records, _ := exec.ReadRecords(svc.LogPath(created.ID), 0)
 	if len(records) != 1 {
 		t.Errorf("len(records) = %d, want 1 (second frame dropped)", len(records))
@@ -203,6 +259,33 @@ func TestCreateMarksExecFailedWhenRuntimeExecFails(t *testing.T) {
 	}
 }
 
+func TestCreateMarksExecFailedWhenRuntimeExecIDUpdateFails(t *testing.T) {
+	f, rid := runningFake(t, nil, 0)
+	st := newStore(t)
+	repo := &failingUpdateRepo{Repo: st.Execs(), failOn: 1}
+	svc, err := exec.NewService(repo, stubLookup{runtimeID: rid}, f, t.TempDir(), 1<<20)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	ctx := context.Background()
+
+	_, err = svc.Create(ctx, exec.CreateOptions{SandboxID: "sandbox-1", Command: []string{"true"}})
+	if err == nil {
+		t.Fatal("Create() error = nil, want the repo update failure")
+	}
+
+	all, listErr := svc.ListBySandbox(ctx, "sandbox-1", exec.Filter{Limit: 10})
+	if listErr != nil {
+		t.Fatalf("ListBySandbox() error = %v", listErr)
+	}
+	if len(all) != 1 {
+		t.Fatalf("len(execs) = %d, want 1", len(all))
+	}
+	if all[0].State != exec.StateFailed {
+		t.Errorf("State = %s, want failed (RuntimeExecID update failed, exec must not be stranded running)", all[0].State)
+	}
+}
+
 func TestBroadcasterWakesWaiterOnNotify(t *testing.T) {
 	b := exec.NewBroadcaster()
 	ch := b.Wait("exec-1")
@@ -239,11 +322,16 @@ func TestSupervisorNotifiesReadersOnCompletion(t *testing.T) {
 	f, rid := runningFake(t, []fake.Step{
 		{Frame: runtime.Frame{Stream: runtime.StreamStdout, Data: []byte("x")}},
 	}, 0)
-	svc := newService(t, stubLookup{runtimeID: rid}, f, 1<<20)
+	release := make(chan struct{})
+	rt := wrapRuntime{Runtime: f, wrap: func(sess runtime.Session) runtime.Session {
+		return &blockingSession{Session: sess, release: release}
+	}}
+	svc := newService(t, stubLookup{runtimeID: rid}, rt, 1<<20)
 	ctx := context.Background()
 
 	created, _ := svc.Create(ctx, exec.CreateOptions{SandboxID: "sandbox-1", Command: []string{"echo"}})
 	ch := svc.Broadcaster().Wait(created.ID)
+	close(release)
 	svc.Wait()
 
 	select {
@@ -271,7 +359,34 @@ func TestSupervisorMarksExecFailedWhenAppendFails(t *testing.T) {
 	if got.State != exec.StateFailed {
 		t.Errorf("State = %s, want failed when a frame could not be persisted, even though the process itself exited cleanly", got.State)
 	}
+	if got.ExitCode != nil {
+		t.Errorf("ExitCode = %v, want nil for a failed exec", *got.ExitCode)
+	}
 	if got.FinishedAt == nil {
 		t.Error("FinishedAt is nil, want a completion timestamp")
+	}
+}
+
+func TestSupervisorMarksExecFailedWhenWaitErrors(t *testing.T) {
+	f, rid := runningFake(t, nil, 0)
+	waitErr := errors.New("wait boom")
+	rt := wrapRuntime{Runtime: f, wrap: func(sess runtime.Session) runtime.Session {
+		return &failingWaitSession{Session: sess, err: waitErr}
+	}}
+	svc := newService(t, stubLookup{runtimeID: rid}, rt, 1<<20)
+	ctx := context.Background()
+
+	created, _ := svc.Create(ctx, exec.CreateOptions{SandboxID: "sandbox-1", Command: []string{"true"}})
+	svc.Wait()
+
+	got, err := svc.Get(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if got.State != exec.StateFailed {
+		t.Errorf("State = %s, want failed when Wait returns an error", got.State)
+	}
+	if got.ExitCode != nil {
+		t.Errorf("ExitCode = %v, want nil", *got.ExitCode)
 	}
 }
