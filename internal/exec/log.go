@@ -72,6 +72,12 @@ func (w *LogWriter) repairTornTail() error {
 	}
 	defer rf.Close()
 
+	info, err := rf.Stat()
+	if err != nil {
+		return fmt.Errorf("stat for read: %w", err)
+	}
+	size := info.Size()
+
 	var (
 		lastBoundary int64 = 0
 		offset       int64 = 0
@@ -87,12 +93,20 @@ func (w *LogWriter) repairTornTail() error {
 		}
 
 		n := binary.BigEndian.Uint32(header[1:])
-		data := make([]byte, n)
-		if _, err := io.ReadFull(rf, data); err != nil {
+		if n > MaxFramePayload {
 			break
 		}
 
-		offset += int64(headerSize) + int64(n)
+		next := offset + int64(headerSize) + int64(n)
+		if next > size {
+			break
+		}
+
+		if _, err := rf.Seek(int64(n), io.SeekCurrent); err != nil {
+			return fmt.Errorf("seek payload: %w", err)
+		}
+
+		offset = next
 		lastBoundary = offset
 	}
 
@@ -138,8 +152,11 @@ func (w *LogWriter) Append(stream LogStream, data []byte) (int64, error) {
 		if info, statErr := w.f.Stat(); statErr == nil {
 			w.offset = info.Size()
 		}
-		w.failed = ErrWriterFailed
-		return w.offset, ErrWriterFailed
+		if err == nil {
+			err = io.ErrShortWrite
+		}
+		w.failed = fmt.Errorf("%w: %w", ErrWriterFailed, err)
+		return w.offset, w.failed
 	}
 
 	w.offset += size
@@ -191,6 +208,9 @@ func ReadRecords(path string, from int64) ([]Record, error) {
 			return nil, fmt.Errorf("exec: read log header: %w", err)
 		}
 		n := binary.BigEndian.Uint32(header[1:])
+		if n > MaxFramePayload {
+			return records, nil
+		}
 		data := make([]byte, n)
 		if _, err := io.ReadFull(f, data); err != nil {
 			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
