@@ -322,24 +322,57 @@ func TestSettingsRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t).Settings()
 
-	if _, err := s.Get(ctx, "missing"); err == nil {
-		t.Error("Get(missing) error = nil, want error")
+	if _, found, err := s.Get(ctx, "missing"); err != nil || found {
+		t.Errorf("Get(missing) = (found=%v, err=%v), want (false, nil)", found, err)
 	}
 	if err := s.Set(ctx, "token_hash", "abc"); err != nil {
 		t.Fatalf("Set() error = %v", err)
 	}
-	got, err := s.Get(ctx, "token_hash")
+	got, found, err := s.Get(ctx, "token_hash")
 	if err != nil {
 		t.Fatalf("Get() error = %v", err)
+	}
+	if !found {
+		t.Error("Get() found = false, want true")
 	}
 	if got != "abc" {
 		t.Errorf("Get() = %q, want abc", got)
 	}
 
 	s.Set(ctx, "token_hash", "def")
-	got, _ = s.Get(ctx, "token_hash")
+	got, _, _ = s.Get(ctx, "token_hash")
 	if got != "def" {
 		t.Errorf("Get() after overwrite = %q, want def", got)
+	}
+}
+
+func TestSettingsGetDistinguishesAbsentFromPresent(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t).Settings()
+
+	value, found, err := s.Get(ctx, "absent_key")
+	if err != nil {
+		t.Fatalf("Get(absent) error = %v, want nil", err)
+	}
+	if found {
+		t.Error("Get(absent) found = true, want false")
+	}
+	if value != "" {
+		t.Errorf("Get(absent) value = %q, want empty", value)
+	}
+
+	if err := s.Set(ctx, "present_key", "some-value"); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+	value, found, err = s.Get(ctx, "present_key")
+	if err != nil {
+		t.Fatalf("Get(present) error = %v, want nil", err)
+	}
+	if !found {
+		t.Error("Get(present) found = false, want true")
+	}
+	if value != "some-value" {
+		t.Errorf("Get(present) value = %q, want some-value", value)
 	}
 }
 

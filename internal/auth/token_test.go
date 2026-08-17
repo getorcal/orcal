@@ -10,19 +10,24 @@ import (
 
 type memStore struct {
 	values map[string]string
+	getErr error
+	setErr error
 }
 
 func newMemStore() *memStore { return &memStore{values: map[string]string{}} }
 
-func (m *memStore) Get(ctx context.Context, key string) (string, error) {
-	v, ok := m.values[key]
-	if !ok {
-		return "", errors.New("not found")
+func (m *memStore) Get(ctx context.Context, key string) (string, bool, error) {
+	if m.getErr != nil {
+		return "", false, m.getErr
 	}
-	return v, nil
+	v, ok := m.values[key]
+	return v, ok, nil
 }
 
 func (m *memStore) Set(ctx context.Context, key, value string) error {
+	if m.setErr != nil {
+		return m.setErr
+	}
 	m.values[key] = value
 	return nil
 }
@@ -125,5 +130,40 @@ func TestEnsurePrefersConfiguredToken(t *testing.T) {
 	}
 	if store.values[auth.SettingKey] != auth.HashToken("configured-token") {
 		t.Error("configured token hash was not persisted")
+	}
+}
+
+func TestEnsurePropagatesTransientGetErrorWithoutMintingToken(t *testing.T) {
+	store := newMemStore()
+	store.getErr = errors.New("transient failure")
+
+	token, generated, err := auth.Ensure(context.Background(), store, "")
+	if err == nil {
+		t.Fatal("Ensure() error = nil, want the transient error")
+	}
+	if generated {
+		t.Error("generated = true on a transient Get error, want false")
+	}
+	if token != "" {
+		t.Errorf("token = %q, want empty on a transient Get error", token)
+	}
+	if _, ok := store.values[auth.SettingKey]; ok {
+		t.Error("Set was called despite a transient Get error")
+	}
+}
+
+func TestEnsurePropagatesSetErrorOnGenerationPath(t *testing.T) {
+	store := newMemStore()
+	store.setErr = errors.New("set failed")
+
+	token, generated, err := auth.Ensure(context.Background(), store, "")
+	if err == nil {
+		t.Fatal("Ensure() error = nil, want the Set error")
+	}
+	if generated {
+		t.Error("generated = true despite Set failing, want false")
+	}
+	if token != "" {
+		t.Errorf("token = %q, want empty since persistence failed", token)
 	}
 }

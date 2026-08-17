@@ -13,7 +13,7 @@ import (
 const SettingKey = "auth_token_hash"
 
 type SettingsStore interface {
-	Get(ctx context.Context, key string) (string, error)
+	Get(ctx context.Context, key string) (string, bool, error)
 	Set(ctx context.Context, key, value string) error
 }
 
@@ -45,7 +45,11 @@ func Ensure(ctx context.Context, store SettingsStore, configured string) (string
 		return configured, false, nil
 	}
 
-	if _, err := store.Get(ctx, SettingKey); err == nil {
+	_, found, err := store.Get(ctx, SettingKey)
+	if err != nil {
+		return "", false, err
+	}
+	if found {
 		return "", false, nil
 	}
 
