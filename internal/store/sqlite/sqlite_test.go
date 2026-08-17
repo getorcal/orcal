@@ -280,6 +280,140 @@ func TestSettingsRoundTrip(t *testing.T) {
 	}
 }
 
+func TestListLabelFilterAppliesBeforeLimit(t *testing.T) {
+	ctx := context.Background()
+	repo := newStore(t).Sandboxes()
+
+	unmatched := []string{
+		"0192f3a4-5b6c-7d8e-9f01-000000000001",
+		"0192f3a4-5b6c-7d8e-9f01-000000000002",
+		"0192f3a4-5b6c-7d8e-9f01-000000000003",
+	}
+	for i, id := range unmatched {
+		s := sample()
+		s.ID = id
+		s.Name = "unmatched" + string(rune('a'+i))
+		s.Labels = map[string]string{"team": "growth"}
+		repo.Create(ctx, s)
+	}
+
+	matched := []string{
+		"0192f3a4-5b6c-7d8e-9f01-000000000004",
+		"0192f3a4-5b6c-7d8e-9f01-000000000005",
+	}
+	for i, id := range matched {
+		s := sample()
+		s.ID = id
+		s.Name = "matched" + string(rune('a'+i))
+		s.Labels = map[string]string{"team": "core"}
+		repo.Create(ctx, s)
+	}
+
+	got, err := repo.List(ctx, sandbox.Filter{Labels: map[string]string{"team": "core"}, Limit: 2})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len(List()) = %d, want 2 matches, not an empty page", len(got))
+	}
+	for _, s := range got {
+		if s.Labels["team"] != "core" {
+			t.Errorf("List() returned %+v, want only team=core", s)
+		}
+	}
+}
+
+func TestUpdateRenameOntoTakenLiveNameReturnsErrNameTaken(t *testing.T) {
+	ctx := context.Background()
+	repo := newStore(t).Sandboxes()
+
+	taken := sample()
+	taken.Name = "taken-name"
+	if err := repo.Create(ctx, taken); err != nil {
+		t.Fatalf("first Create() error = %v", err)
+	}
+
+	renamed := sample()
+	renamed.ID = "0192f3a4-5b6c-7d8e-9f01-23456789abce"
+	renamed.Name = "original-name"
+	if err := repo.Create(ctx, renamed); err != nil {
+		t.Fatalf("second Create() error = %v", err)
+	}
+
+	renamed.Name = "taken-name"
+	err := repo.Update(ctx, renamed)
+	if !errors.Is(err, sandbox.ErrNameTaken) {
+		t.Errorf("Update() error = %v, want sandbox.ErrNameTaken", err)
+	}
+}
+
+func TestCreateMultipleUnnamedSandboxesCoexist(t *testing.T) {
+	ctx := context.Background()
+	repo := newStore(t).Sandboxes()
+
+	first := sample()
+	first.Name = ""
+	if err := repo.Create(ctx, first); err != nil {
+		t.Fatalf("first Create() error = %v", err)
+	}
+
+	second := sample()
+	second.ID = "0192f3a4-5b6c-7d8e-9f01-23456789abce"
+	second.Name = ""
+	if err := repo.Create(ctx, second); err != nil {
+		t.Errorf("second Create() error = %v, want nil", err)
+	}
+}
+
+func TestTimestampTextFormOrdersChronologically(t *testing.T) {
+	ctx := context.Background()
+	st := newStore(t)
+	repo := st.Sandboxes()
+
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	earlier := sample()
+	earlier.ID = "0192f3a4-5b6c-7d8e-9f01-000000000010"
+	earlier.Name = "earlier-agent"
+	earlier.CreatedAt = base
+	earlier.UpdatedAt = base
+	if err := repo.Create(ctx, earlier); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	later := sample()
+	later.ID = "0192f3a4-5b6c-7d8e-9f01-000000000011"
+	later.Name = "later-agent"
+	later.CreatedAt = base.Add(500 * time.Millisecond)
+	later.UpdatedAt = later.CreatedAt
+	if err := repo.Create(ctx, later); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	gotEarlier, err := repo.Get(ctx, earlier.ID)
+	if err != nil {
+		t.Fatalf("Get(earlier) error = %v", err)
+	}
+	gotLater, err := repo.Get(ctx, later.ID)
+	if err != nil {
+		t.Fatalf("Get(later) error = %v", err)
+	}
+	if !gotEarlier.CreatedAt.Before(gotLater.CreatedAt) {
+		t.Errorf("parsed CreatedAt ordering = %v, %v, want earlier before later", gotEarlier.CreatedAt, gotLater.CreatedAt)
+	}
+
+	var earlierText, laterText string
+	if err := st.db.QueryRowContext(ctx, `SELECT created_at FROM sandboxes WHERE id = ?`, earlier.ID).Scan(&earlierText); err != nil {
+		t.Fatalf("query earlier created_at: %v", err)
+	}
+	if err := st.db.QueryRowContext(ctx, `SELECT created_at FROM sandboxes WHERE id = ?`, later.ID).Scan(&laterText); err != nil {
+		t.Fatalf("query later created_at: %v", err)
+	}
+	if !(earlierText < laterText) {
+		t.Errorf("stored TEXT ordering = %q, %q, want earlier < later lexicographically", earlierText, laterText)
+	}
+}
+
 func TestOpenIsIdempotentAcrossRestarts(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "orcal.db")

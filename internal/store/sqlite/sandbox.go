@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -34,7 +35,7 @@ func (r *sandboxRepo) Create(ctx context.Context, s *sandbox.Sandbox) error {
 		string(env), string(labels),
 		s.CreatedAt.Format(timeFormat), s.UpdatedAt.Format(timeFormat))
 	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE") && strings.Contains(err.Error(), "name") {
+		if isNameUniqueViolation(err) {
 			return fmt.Errorf("%w: %s", sandbox.ErrNameTaken, s.Name)
 		}
 		return fmt.Errorf("sqlite: insert sandbox: %w", err)
@@ -67,6 +68,17 @@ func (r *sandboxRepo) List(ctx context.Context, f sandbox.Filter) ([]*sandbox.Sa
 	} else {
 		query += ` AND state != 'destroyed'`
 	}
+	if len(f.Labels) > 0 {
+		keys := make([]string, 0, len(f.Labels))
+		for k := range f.Labels {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			query += ` AND json_extract(labels, ?) = ?`
+			args = append(args, "$."+k, f.Labels[k])
+		}
+	}
 	if f.Cursor != "" {
 		query += ` AND id > ?`
 		args = append(args, f.Cursor)
@@ -89,9 +101,6 @@ func (r *sandboxRepo) List(ctx context.Context, f sandbox.Filter) ([]*sandbox.Sa
 		if err != nil {
 			return nil, err
 		}
-		if !matchesLabels(s.Labels, f.Labels) {
-			continue
-		}
 		out = append(out, s)
 	}
 	return out, rows.Err()
@@ -106,6 +115,9 @@ func (r *sandboxRepo) Update(ctx context.Context, s *sandbox.Sandbox) error {
 		s.Resources.CPUMillis, s.Resources.MemoryBytes, s.Resources.PidsLimit,
 		string(env), string(labels), s.UpdatedAt.Format(timeFormat), s.ID)
 	if err != nil {
+		if isNameUniqueViolation(err) {
+			return fmt.Errorf("%w: %s", sandbox.ErrNameTaken, s.Name)
+		}
 		return fmt.Errorf("sqlite: update sandbox: %w", err)
 	}
 	n, err := res.RowsAffected()
@@ -155,11 +167,6 @@ func scanSandbox(row scanner) (*sandbox.Sandbox, error) {
 	return &s, nil
 }
 
-func matchesLabels(have, want map[string]string) bool {
-	for k, v := range want {
-		if have[k] != v {
-			return false
-		}
-	}
-	return true
+func isNameUniqueViolation(err error) bool {
+	return strings.Contains(err.Error(), "sandboxes.name")
 }

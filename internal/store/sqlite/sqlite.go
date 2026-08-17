@@ -6,7 +6,6 @@ import (
 	"embed"
 	"fmt"
 	"sort"
-	"time"
 
 	"github.com/getorcal/orcal/internal/exec"
 	"github.com/getorcal/orcal/internal/sandbox"
@@ -16,7 +15,7 @@ import (
 //go:embed migrations/*.sql
 var migrationFS embed.FS
 
-const timeFormat = time.RFC3339Nano
+const timeFormat = "2006-01-02T15:04:05.000000000Z07:00"
 
 type Store struct {
 	db *sql.DB
