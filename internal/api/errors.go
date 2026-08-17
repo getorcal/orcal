@@ -1,0 +1,71 @@
+package api
+
+import (
+	"encoding/json"
+	"errors"
+	"log/slog"
+	"net/http"
+
+	"github.com/getorcal/orcal/internal/apigen"
+	"github.com/getorcal/orcal/internal/exec"
+	"github.com/getorcal/orcal/internal/runtime"
+	"github.com/getorcal/orcal/internal/sandbox"
+)
+
+type ErrorCode = apigen.ErrorBodyCode
+
+const (
+	CodeInvalidRequest     ErrorCode = apigen.InvalidRequest
+	CodeUnauthorized       ErrorCode = apigen.Unauthorized
+	CodeSandboxNotFound    ErrorCode = apigen.SandboxNotFound
+	CodeExecNotFound       ErrorCode = apigen.ExecNotFound
+	CodeNameTaken          ErrorCode = apigen.NameTaken
+	CodeInvalidState       ErrorCode = apigen.InvalidState
+	CodeResourceExhausted  ErrorCode = apigen.ResourceExhausted
+	CodeRuntimeUnavailable ErrorCode = apigen.RuntimeUnavailable
+	CodeInternalError      ErrorCode = apigen.InternalError
+)
+
+func classify(err error) (int, ErrorCode) {
+	switch {
+	case errors.Is(err, sandbox.ErrNotFound):
+		return http.StatusNotFound, CodeSandboxNotFound
+	case errors.Is(err, exec.ErrNotFound):
+		return http.StatusNotFound, CodeExecNotFound
+	case errors.Is(err, sandbox.ErrNameTaken):
+		return http.StatusConflict, CodeNameTaken
+	case errors.Is(err, sandbox.ErrInvalidState):
+		return http.StatusConflict, CodeInvalidState
+	case errors.Is(err, sandbox.ErrInvalidName), errors.Is(err, sandbox.ErrNameLooksLikeID),
+		errors.Is(err, sandbox.ErrInvalidImage):
+		return http.StatusBadRequest, CodeInvalidRequest
+	case errors.Is(err, sandbox.ErrResourceExhausted):
+		return http.StatusTooManyRequests, CodeResourceExhausted
+	case errors.Is(err, runtime.ErrUnavailable):
+		return http.StatusServiceUnavailable, CodeRuntimeUnavailable
+	case errors.Is(err, runtime.ErrNotFound), errors.Is(err, runtime.ErrConflict):
+		return http.StatusConflict, CodeInvalidState
+	default:
+		return http.StatusInternalServerError, CodeInternalError
+	}
+}
+
+func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error) {
+	status, code := classify(err)
+	message := err.Error()
+	if code == CodeInternalError {
+		s.logger.ErrorContext(r.Context(), "request failed", slog.String("error", err.Error()))
+		message = "an internal error occurred"
+	}
+	writeJSON(w, status, apigen.Error{Error: apigen.ErrorBody{
+		Code:    code,
+		Message: message,
+		Details: &map[string]any{"request_id": requestIDFrom(r.Context())},
+	}})
+}
+
+func writeJSON(w http.ResponseWriter, status int, body any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(body)
+}
