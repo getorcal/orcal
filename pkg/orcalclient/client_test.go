@@ -213,6 +213,69 @@ func TestClientDistinguishesGapEventsFromOutput(t *testing.T) {
 	}
 }
 
+func TestClientEscapesReservedCharactersInPathSegments(t *testing.T) {
+	var gotPath, gotRawQuery string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotRawQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher := w.(http.Flusher)
+		fmt.Fprint(w, "event: exit\ndata: {\"state\":\"exited\",\"exit_code\":0,\"truncated\":false}\n\n")
+		flusher.Flush()
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	c := orcalclient.New(srv.URL, "token")
+
+	id := "a?b#c/d"
+	err := c.StreamOutput(context.Background(), id, 0, func(orcalclient.OutputEvent) error { return nil })
+	if err != nil {
+		t.Fatalf("StreamOutput() error = %v", err)
+	}
+
+	wantPath := "/v1/execs/" + id + "/output"
+	if gotPath != wantPath {
+		t.Errorf("server received path %q, want %q", gotPath, wantPath)
+	}
+	if gotRawQuery != "from=0" {
+		t.Errorf("server received query %q, want %q", gotRawQuery, "from=0")
+	}
+}
+
+func TestClientDoesNotCarryEventTypeAcrossBareDataLines(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/execs/exec-2/output", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher := w.(http.Flusher)
+		fmt.Fprint(w, "event: gap\ndata: {\"offset\":1}\n\n")
+		flusher.Flush()
+		fmt.Fprint(w, "data: {\"offset\":2}\n\n")
+		flusher.Flush()
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	c := orcalclient.New(srv.URL, "token")
+
+	var events []orcalclient.OutputEvent
+	err := c.StreamOutput(context.Background(), "exec-2", 0, func(e orcalclient.OutputEvent) error {
+		events = append(events, e)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("StreamOutput() error = %v", err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("len(events) = %d, want 2", len(events))
+	}
+	if events[0].Event != "gap" {
+		t.Errorf("events[0].Event = %q, want gap", events[0].Event)
+	}
+	if events[1].Event != "" {
+		t.Errorf("events[1].Event = %q, want empty (no preceding event: line)", events[1].Event)
+	}
+}
+
 func TestClientListsAndDestroys(t *testing.T) {
 	c, _, _ := newClient(t)
 	ctx := context.Background()

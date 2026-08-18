@@ -3,6 +3,7 @@ package orcalclient
 import (
 	"context"
 	"net/http"
+	"net/url"
 
 	"github.com/getorcal/orcal/internal/apigen"
 )
@@ -26,19 +27,19 @@ func (c *Client) ListSandboxes(ctx context.Context, params ListParams) (*apigen.
 }
 
 func (c *Client) GetSandbox(ctx context.Context, ref string) (*apigen.Sandbox, error) {
-	return do[apigen.Sandbox](c, ctx, http.MethodGet, "/v1/sandboxes/"+ref, nil)
+	return do[apigen.Sandbox](c, ctx, http.MethodGet, "/v1/sandboxes/"+url.PathEscape(ref), nil)
 }
 
 func (c *Client) StartSandbox(ctx context.Context, ref string) (*apigen.Sandbox, error) {
-	return do[apigen.Sandbox](c, ctx, http.MethodPost, "/v1/sandboxes/"+ref+"/start", nil)
+	return do[apigen.Sandbox](c, ctx, http.MethodPost, "/v1/sandboxes/"+url.PathEscape(ref)+"/start", nil)
 }
 
 func (c *Client) StopSandbox(ctx context.Context, ref string) (*apigen.Sandbox, error) {
-	return do[apigen.Sandbox](c, ctx, http.MethodPost, "/v1/sandboxes/"+ref+"/stop", nil)
+	return do[apigen.Sandbox](c, ctx, http.MethodPost, "/v1/sandboxes/"+url.PathEscape(ref)+"/stop", nil)
 }
 
 func (c *Client) DestroySandbox(ctx context.Context, ref string) (*apigen.Sandbox, error) {
-	return do[apigen.Sandbox](c, ctx, http.MethodDelete, "/v1/sandboxes/"+ref, nil)
+	return do[apigen.Sandbox](c, ctx, http.MethodDelete, "/v1/sandboxes/"+url.PathEscape(ref), nil)
 }
 
 func (c *Client) Version(ctx context.Context) (*apigen.Version, error) {

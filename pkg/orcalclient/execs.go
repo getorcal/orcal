@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -31,19 +32,19 @@ type OutputEvent struct {
 }
 
 func (c *Client) CreateExec(ctx context.Context, ref string, params CreateExecParams) (*apigen.Exec, error) {
-	return do[apigen.Exec](c, ctx, http.MethodPost, "/v1/sandboxes/"+ref+"/execs", params)
+	return do[apigen.Exec](c, ctx, http.MethodPost, "/v1/sandboxes/"+url.PathEscape(ref)+"/execs", params)
 }
 
 func (c *Client) GetExec(ctx context.Context, id string) (*apigen.Exec, error) {
-	return do[apigen.Exec](c, ctx, http.MethodGet, "/v1/execs/"+id, nil)
+	return do[apigen.Exec](c, ctx, http.MethodGet, "/v1/execs/"+url.PathEscape(id), nil)
 }
 
 func (c *Client) ListExecs(ctx context.Context, ref string, params ListParams) (*apigen.ExecList, error) {
-	return do[apigen.ExecList](c, ctx, http.MethodGet, "/v1/sandboxes/"+ref+"/execs?"+params.query().Encode(), nil)
+	return do[apigen.ExecList](c, ctx, http.MethodGet, "/v1/sandboxes/"+url.PathEscape(ref)+"/execs?"+params.query().Encode(), nil)
 }
 
 func (c *Client) StreamOutput(ctx context.Context, id string, from int64, handler func(OutputEvent) error) error {
-	path := "/v1/execs/" + id + "/output?from=" + strconv.FormatInt(from, 10)
+	path := "/v1/execs/" + url.PathEscape(id) + "/output?from=" + strconv.FormatInt(from, 10)
 	req, err := c.newRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return err
@@ -72,6 +73,7 @@ func (c *Client) StreamOutput(ctx context.Context, id string, from int64, handle
 			if err := handler(parsed); err != nil {
 				return err
 			}
+			event = ""
 		}
 	}
 	if err := scanner.Err(); err != nil {
