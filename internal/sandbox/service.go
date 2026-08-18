@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/getorcal/orcal/internal/id"
 	"github.com/getorcal/orcal/internal/runtime"
 	"github.com/google/uuid"
 )
@@ -38,7 +39,7 @@ func NewService(repo Repo, rt runtime.Runtime, defaults Resources, network strin
 		network:  network,
 		locks:    newKeyedMutex(),
 		now:      func() time.Time { return time.Now().UTC() },
-		newID:    uuid.NewString,
+		newID:    id.New,
 	}
 }
 

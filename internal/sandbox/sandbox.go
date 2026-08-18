@@ -15,6 +15,9 @@ type Sandbox struct {
 	State     State
 	Runtime   string
 	RuntimeID string
+
+	ParentSnapshotID *string
+
 	Resources Resources
 	Env       map[string]string
 	Labels    map[string]string

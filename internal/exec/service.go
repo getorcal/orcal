@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getorcal/orcal/internal/id"
 	"github.com/getorcal/orcal/internal/runtime"
-	"github.com/google/uuid"
 )
 
 const reconcilePollInterval = 500 * time.Millisecond
@@ -54,7 +54,7 @@ func NewService(repo Repo, sandboxes SandboxLookup, rt runtime.Runtime, dir stri
 		maxBytes:   maxBytes,
 		bcast:      NewBroadcaster(),
 		now:        func() time.Time { return time.Now().UTC() },
-		newID:      uuid.NewString,
+		newID:      id.New,
 		shutdownCh: make(chan struct{}),
 	}, nil
 }
