@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -12,6 +13,10 @@ import (
 
 	"github.com/getorcal/orcal/internal/apigen"
 )
+
+func init() {
+	openapi3filter.RegisterBodyDecoder("text/event-stream", openapi3filter.PlainBodyDecoder)
+}
 
 func loadRouter(t *testing.T) (*openapi3.T, routers.Router) {
 	t.Helper()
@@ -63,11 +68,21 @@ func TestResponsesMatchTheOpenAPIContract(t *testing.T) {
 	h.fake.SetExecScript(nil, 0)
 
 	created := createSandbox(t, h, "my-agent")
-	execResp := h.do(t, http.MethodPost, "/v1/sandboxes/my-agent/execs", map[string]any{
+
+	execResp, execReq, execBody := h.doCapturing(t, http.MethodPost, "/v1/sandboxes/my-agent/execs", map[string]any{
 		"command": []string{"true"},
 	})
-	createdExec := decode[apigen.Exec](t, execResp)
+	if execResp.StatusCode != http.StatusCreated {
+		t.Fatalf("create exec status = %d, want 201", execResp.StatusCode)
+	}
+	var createdExec apigen.Exec
+	if err := json.Unmarshal(execBody, &createdExec); err != nil {
+		t.Fatalf("decode exec: %v", err)
+	}
 	h.execs.Wait()
+	t.Run(execReq.Method+" "+execReq.URL.Path, func(t *testing.T) {
+		assertMatchesContract(t, router, execReq, execResp, execBody)
+	})
 
 	cases := []struct {
 		method string
@@ -81,6 +96,8 @@ func TestResponsesMatchTheOpenAPIContract(t *testing.T) {
 		{http.MethodGet, "/v1/sandboxes/ghost", nil},
 		{http.MethodGet, "/v1/sandboxes/my-agent/execs", nil},
 		{http.MethodGet, "/v1/execs/" + createdExec.Id, nil},
+		{http.MethodGet, "/v1/execs/" + createdExec.Id + "/output", nil},
+		{http.MethodGet, "/v1/execs/" + createdExec.Id + "/output?from=notanumber", nil},
 		{http.MethodPost, "/v1/sandboxes", map[string]any{"image": "alpine"}},
 		{http.MethodPost, "/v1/sandboxes", map[string]any{"name": "my-agent", "image": "alpine"}},
 		{http.MethodPost, "/v1/sandboxes/my-agent/start", nil},

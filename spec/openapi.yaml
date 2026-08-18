@@ -172,6 +172,7 @@ paths:
           content:
             text/event-stream:
               schema: { type: string }
+        "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
 components:

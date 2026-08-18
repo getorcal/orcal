@@ -10,7 +10,6 @@ import (
 
 	"github.com/getorcal/orcal/internal/apigen"
 	"github.com/getorcal/orcal/internal/exec"
-	"github.com/getorcal/orcal/internal/sandbox"
 )
 
 const heartbeatInterval = 30 * time.Second
@@ -31,11 +30,11 @@ func (s *Server) handleCreateExec(w http.ResponseWriter, r *http.Request) {
 
 	var req apigen.CreateExecRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		s.writeError(w, r, fmt.Errorf("%w: malformed JSON body", sandbox.ErrInvalidName))
+		s.writeError(w, r, fmt.Errorf("%w: malformed JSON body", ErrInvalidRequest))
 		return
 	}
 	if len(req.Command) == 0 {
-		s.writeError(w, r, fmt.Errorf("%w: command is required", sandbox.ErrInvalidName))
+		s.writeError(w, r, fmt.Errorf("%w: command is required", ErrInvalidRequest))
 		return
 	}
 
@@ -106,7 +105,7 @@ func (s *Server) handleExecOutput(w http.ResponseWriter, r *http.Request) {
 	if raw := r.URL.Query().Get("from"); raw != "" {
 		parsed, parseErr := strconv.ParseInt(raw, 10, 64)
 		if parseErr != nil || parsed < 0 {
-			s.writeError(w, r, fmt.Errorf("%w: from must be a non-negative integer", sandbox.ErrInvalidName))
+			s.writeError(w, r, fmt.Errorf("%w: from must be a non-negative integer", ErrInvalidRequest))
 			return
 		}
 		from = parsed

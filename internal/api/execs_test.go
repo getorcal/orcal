@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/getorcal/orcal/internal/apigen"
+	"github.com/getorcal/orcal/internal/exec"
 	"github.com/getorcal/orcal/internal/runtime"
 	"github.com/getorcal/orcal/internal/runtime/fake"
 )
@@ -28,6 +30,7 @@ func readEvents(t *testing.T, resp *http.Response) []outputEvent {
 		name   string
 	)
 	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
 		line := scanner.Text()
 		switch {
@@ -40,6 +43,9 @@ func readEvents(t *testing.T, resp *http.Response) []outputEvent {
 			}
 			events = append(events, outputEvent{name: name, data: payload})
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("scan output stream: %v", err)
 	}
 	return events
 }
@@ -220,6 +226,35 @@ func TestOutputStreamResumesFromOffset(t *testing.T) {
 	decoded, _ := base64.StdEncoding.DecodeString(resumed[0].data["data"].(string))
 	if string(decoded) != "second" {
 		t.Errorf("resumed payload = %q, want second", decoded)
+	}
+}
+
+func TestOutputStreamLargeFrameRoundTripsFullLength(t *testing.T) {
+	h := newHarness(t)
+	payload := bytes.Repeat([]byte("x"), exec.MaxFramePayload)
+	h.fake.SetExecScript([]fake.Step{
+		{Frame: runtime.Frame{Stream: runtime.StreamStdout, Data: payload}},
+	}, 0)
+	createSandbox(t, h, "my-agent")
+	created := decode[apigen.Exec](t, h.do(t, http.MethodPost, "/v1/sandboxes/my-agent/execs", map[string]any{
+		"command": []string{"echo"},
+	}))
+	h.execs.Wait()
+
+	events := readEvents(t, h.do(t, http.MethodGet, "/v1/execs/"+created.Id+"/output", nil))
+
+	if len(events) != 2 {
+		t.Fatalf("len(events) = %d, want 2 (one output, one exit)", len(events))
+	}
+	decoded, err := base64.StdEncoding.DecodeString(events[0].data["data"].(string))
+	if err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if len(decoded) != exec.MaxFramePayload {
+		t.Fatalf("payload length = %d, want %d", len(decoded), exec.MaxFramePayload)
+	}
+	if !bytes.Equal(decoded, payload) {
+		t.Errorf("payload did not round-trip byte-for-byte")
 	}
 }
 

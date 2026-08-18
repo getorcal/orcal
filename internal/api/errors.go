@@ -14,6 +14,8 @@ import (
 
 type ErrorCode = apigen.ErrorBodyCode
 
+var ErrInvalidRequest = errors.New("api: invalid request")
+
 const (
 	CodeInvalidRequest     ErrorCode = apigen.InvalidRequest
 	CodeUnauthorized       ErrorCode = apigen.Unauthorized
@@ -37,7 +39,7 @@ func classify(err error) (int, ErrorCode) {
 	case errors.Is(err, sandbox.ErrInvalidState):
 		return http.StatusConflict, CodeInvalidState
 	case errors.Is(err, sandbox.ErrInvalidName), errors.Is(err, sandbox.ErrNameLooksLikeID),
-		errors.Is(err, sandbox.ErrInvalidImage):
+		errors.Is(err, sandbox.ErrInvalidImage), errors.Is(err, ErrInvalidRequest):
 		return http.StatusBadRequest, CodeInvalidRequest
 	case errors.Is(err, sandbox.ErrResourceExhausted):
 		return http.StatusTooManyRequests, CodeResourceExhausted
