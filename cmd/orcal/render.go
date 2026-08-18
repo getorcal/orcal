@@ -1,0 +1,107 @@
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"strings"
+	"text/tabwriter"
+
+	"github.com/getorcal/orcal/internal/apigen"
+	"github.com/getorcal/orcal/pkg/orcalclient"
+)
+
+const (
+	exitOK       = 0
+	exitError    = 1
+	exitUsage    = 2
+	exitNotFound = 3
+	exitAuth     = 4
+	exitSelf     = 125
+)
+
+func exitCode(err error) int {
+	if err == nil {
+		return exitOK
+	}
+	var apiErr *orcalclient.APIError
+	if !errors.As(err, &apiErr) {
+		return exitError
+	}
+	switch apiErr.Code {
+	case "sandbox_not_found", "exec_not_found":
+		return exitNotFound
+	case "unauthorized":
+		return exitAuth
+	case "invalid_request":
+		return exitUsage
+	default:
+		return exitError
+	}
+}
+
+func renderJSON(w io.Writer, value any) error {
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(value)
+}
+
+func renderJSONLine(w io.Writer, value any) error {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(w, string(encoded))
+	return err
+}
+
+func printError(w io.Writer, jsonOutput bool, err error) error {
+	if !jsonOutput {
+		msg := err.Error()
+		if !strings.HasPrefix(msg, "orcal:") {
+			msg = "orcal: " + msg
+		}
+		_, writeErr := fmt.Fprintln(w, msg)
+		return writeErr
+	}
+	payload := map[string]any{"message": err.Error()}
+	var apiErr *orcalclient.APIError
+	if errors.As(err, &apiErr) {
+		payload["code"] = apiErr.Code
+		payload["status_code"] = apiErr.StatusCode
+	}
+	return renderJSONLine(w, payload)
+}
+
+func renderSandbox(w io.Writer, format string, s *apigen.Sandbox) error {
+	if format == "json" {
+		return renderJSON(w, s)
+	}
+	fmt.Fprintf(w, "%s\n", s.Id)
+	return nil
+}
+
+func renderSandboxList(w io.Writer, format string, list *apigen.SandboxList) error {
+	if format == "json" {
+		return renderJSON(w, list)
+	}
+	tw := tabwriter.NewWriter(w, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(tw, "ID\tNAME\tIMAGE\tSTATE")
+	for _, item := range list.Items {
+		name := "-"
+		if item.Name != nil {
+			name = *item.Name
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", item.Id, name, item.Image, item.State)
+	}
+	return tw.Flush()
+}
+
+func renderExec(w io.Writer, format string, e *apigen.Exec) error {
+	if format == "json" {
+		return renderJSON(w, e)
+	}
+	fmt.Fprintf(w, "%s\n", e.Id)
+	return nil
+}
