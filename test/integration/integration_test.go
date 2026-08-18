@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -49,8 +50,10 @@ func removeTestNetwork() {
 }
 
 type env struct {
-	client *orcalclient.Client
-	docker *docker.Docker
+	client    *orcalclient.Client
+	docker    *docker.Docker
+	sandboxes []string
+	snapshots []string
 }
 
 func newEnv(t *testing.T) *env {
@@ -98,7 +101,38 @@ func newEnv(t *testing.T) *env {
 	}))
 	t.Cleanup(srv.Close)
 
-	return &env{client: orcalclient.New(srv.URL, testToken), docker: rt}
+	e := &env{client: orcalclient.New(srv.URL, testToken), docker: rt}
+	t.Cleanup(func() {
+		teardownCtx := context.Background()
+		for _, id := range e.sandboxes {
+			if _, err := e.client.DestroySandbox(teardownCtx, id); err != nil && !sandboxAlreadyGone(err) {
+				t.Errorf("cleanup: DestroySandbox(%s) error = %v", id, err)
+			}
+		}
+		for i := len(e.snapshots) - 1; i >= 0; i-- {
+			id := e.snapshots[i]
+			if err := e.client.DeleteSnapshot(teardownCtx, id); err != nil && !snapshotAlreadyGone(err) {
+				t.Errorf("cleanup: DeleteSnapshot(%s) error = %v", id, err)
+			}
+		}
+	})
+	return e
+}
+
+func sandboxAlreadyGone(err error) bool {
+	var apiErr *orcalclient.APIError
+	if !asAPIError(err, &apiErr) {
+		return false
+	}
+	return apiErr.StatusCode == http.StatusNotFound || apiErr.StatusCode == http.StatusConflict
+}
+
+func snapshotAlreadyGone(err error) bool {
+	var apiErr *orcalclient.APIError
+	if !asAPIError(err, &apiErr) {
+		return false
+	}
+	return apiErr.StatusCode == http.StatusNotFound
 }
 
 func (e *env) sandbox(t *testing.T, name string) string {
@@ -108,7 +142,7 @@ func (e *env) sandbox(t *testing.T, name string) string {
 	if err != nil {
 		t.Fatalf("CreateSandbox() error = %v", err)
 	}
-	t.Cleanup(func() { e.client.DestroySandbox(context.Background(), created.Id) })
+	e.sandboxes = append(e.sandboxes, created.Id)
 	return created.Id
 }
 

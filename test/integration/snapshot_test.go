@@ -17,7 +17,7 @@ func (e *env) snapshot(t *testing.T, sandboxRef, name string) string {
 	if err != nil {
 		t.Fatalf("CreateSnapshot(%s) error = %v", sandboxRef, err)
 	}
-	t.Cleanup(func() { e.client.DeleteSnapshot(context.Background(), snap.Id) })
+	e.snapshots = append(e.snapshots, snap.Id)
 	return snap.Id
 }
 
