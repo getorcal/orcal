@@ -1,0 +1,18 @@
+services:
+  orcald:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: ghcr.io/getorcal/orcald:dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      ORCAL_ADDR: "0.0.0.0:8080"
+      ORCAL_DATA_DIR: "/var/lib/orcal"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - orcal-data:/var/lib/orcal
+
+volumes:
+  orcal-data:
