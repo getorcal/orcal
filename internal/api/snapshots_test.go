@@ -1,11 +1,17 @@
 package api_test
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"testing"
 
 	"github.com/getorcal/orcal/internal/apigen"
 )
+
+type onlyReader struct{ r *bytes.Reader }
+
+func (o onlyReader) Read(p []byte) (int, error) { return o.r.Read(p) }
 
 func TestCreateSnapshotReturns201(t *testing.T) {
 	h := newHarness(t)
@@ -64,13 +70,38 @@ func TestGetUnknownSnapshotReturns404SnapshotNotFound(t *testing.T) {
 
 func TestListSnapshotsForASandbox(t *testing.T) {
 	h := newHarness(t)
-	createSandbox(t, h, "my-agent")
+	agent := createSandbox(t, h, "my-agent")
 	h.do(t, http.MethodPost, "/v1/sandboxes/my-agent/snapshots", map[string]any{"name": "v1"})
 	h.do(t, http.MethodPost, "/v1/sandboxes/my-agent/snapshots", map[string]any{"name": "v2"})
 
+	createSandbox(t, h, "other-agent")
+	h.do(t, http.MethodPost, "/v1/sandboxes/other-agent/snapshots", map[string]any{"name": "other-v1"})
+
 	list := decode[apigen.SnapshotList](t, h.do(t, http.MethodGet, "/v1/sandboxes/my-agent/snapshots", nil))
 	if len(list.Items) != 2 {
-		t.Errorf("len(items) = %d, want 2", len(list.Items))
+		t.Fatalf("len(items) = %d, want 2", len(list.Items))
+	}
+	for _, item := range list.Items {
+		if item.SandboxId != agent.Id {
+			t.Errorf("item.sandbox_id = %q, want %q", item.SandboxId, agent.Id)
+		}
+	}
+}
+
+func TestListSnapshotsFiltersByQueryParam(t *testing.T) {
+	h := newHarness(t)
+	createSandbox(t, h, "my-agent")
+	h.do(t, http.MethodPost, "/v1/sandboxes/my-agent/snapshots", map[string]any{"name": "v1"})
+
+	createSandbox(t, h, "other-agent")
+	h.do(t, http.MethodPost, "/v1/sandboxes/other-agent/snapshots", map[string]any{"name": "other-v1"})
+
+	list := decode[apigen.SnapshotList](t, h.do(t, http.MethodGet, "/v1/snapshots?sandbox=my-agent", nil))
+	if len(list.Items) != 1 {
+		t.Fatalf("len(items) = %d, want 1", len(list.Items))
+	}
+	if list.Items[0].Name == nil || *list.Items[0].Name != "v1" {
+		t.Errorf("name = %v, want v1", list.Items[0].Name)
 	}
 }
 
@@ -162,5 +193,50 @@ func TestDeleteSnapshotWithDescendantsReturns409(t *testing.T) {
 	}
 	if body := decode[apigen.Error](t, resp); body.Error.Code != "invalid_state" {
 		t.Errorf("code = %q, want invalid_state", body.Error.Code)
+	}
+}
+
+func TestCreateSnapshotWithChunkedBodyIsNotSilentlyDropped(t *testing.T) {
+	h := newHarness(t)
+	createSandbox(t, h, "my-agent")
+
+	encoded, err := json.Marshal(map[string]any{"name": "chunky"})
+	if err != nil {
+		t.Fatalf("marshal body: %v", err)
+	}
+	req, err := http.NewRequest(http.MethodPost, h.server.URL+"/v1/sandboxes/my-agent/snapshots", onlyReader{bytes.NewReader(encoded)})
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+testToken)
+	req.Header.Set("Content-Type", "application/json")
+	if req.ContentLength != 0 {
+		t.Fatalf("ContentLength = %d, want 0 (unknown) so the transport sends this chunked", req.ContentLength)
+	}
+
+	resp, err := h.server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("do request: %v", err)
+	}
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", resp.StatusCode)
+	}
+	got := decode[apigen.Snapshot](t, resp)
+	if got.Name == nil || *got.Name != "chunky" {
+		t.Errorf("name = %v, want chunky", got.Name)
+	}
+}
+
+func TestCreateSnapshotWithNoBodyReturns201(t *testing.T) {
+	h := newHarness(t)
+	createSandbox(t, h, "my-agent")
+
+	resp := h.do(t, http.MethodPost, "/v1/sandboxes/my-agent/snapshots", nil)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", resp.StatusCode)
+	}
+	got := decode[apigen.Snapshot](t, resp)
+	if got.Name != nil {
+		t.Errorf("name = %v, want nil", got.Name)
 	}
 }

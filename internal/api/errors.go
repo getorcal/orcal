@@ -34,7 +34,7 @@ func classify(err error) (int, ErrorCode) {
 	switch {
 	case errors.Is(err, snapshot.ErrNotFound):
 		return http.StatusNotFound, CodeSnapshotNotFound
-	case errors.Is(err, snapshot.ErrHasChildren), errors.Is(err, snapshot.ErrBackingImageMissing):
+	case errors.Is(err, snapshot.ErrHasChildren):
 		return http.StatusConflict, CodeInvalidState
 	case errors.Is(err, snapshot.ErrNameTaken):
 		return http.StatusConflict, CodeNameTaken

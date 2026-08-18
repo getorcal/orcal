@@ -2,7 +2,9 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/getorcal/orcal/internal/apigen"
@@ -20,11 +22,9 @@ func (s *Server) registerSnapshotRoutes(mux *http.ServeMux) {
 
 func (s *Server) handleCreateSnapshot(w http.ResponseWriter, r *http.Request) {
 	var req apigen.CreateSnapshotRequest
-	if r.ContentLength > 0 {
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			s.writeError(w, r, fmt.Errorf("%w: malformed JSON body", ErrInvalidRequest))
-			return
-		}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+		s.writeError(w, r, fmt.Errorf("%w: malformed JSON body", ErrInvalidRequest))
+		return
 	}
 
 	opts := snapshot.CreateOptions{SandboxRef: r.PathValue("ref")}

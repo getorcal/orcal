@@ -21,6 +21,7 @@ import (
 	"github.com/getorcal/orcal/internal/exec"
 	"github.com/getorcal/orcal/internal/runtime/docker"
 	"github.com/getorcal/orcal/internal/sandbox"
+	"github.com/getorcal/orcal/internal/snapshot"
 	"github.com/getorcal/orcal/internal/store/sqlite"
 	"github.com/getorcal/orcal/pkg/orcalclient"
 )
@@ -83,10 +84,13 @@ func newEnv(t *testing.T) *env {
 			t.Logf("exec.Shutdown() error = %v", err)
 		}
 	})
+	snapshots := snapshot.NewService(st.Snapshots(), sandboxes, rt)
+	sandboxes.SetSnapshots(snapshots)
 
 	srv := httptest.NewServer(api.NewServer(api.Options{
 		Sandboxes: sandboxes,
 		Execs:     execs,
+		Snapshots: snapshots,
 		TokenHash: auth.HashToken(testToken),
 		Version:   "integration",
 		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),

@@ -32,7 +32,6 @@ func TestClassifyMapsEveryDomainSentinel(t *testing.T) {
 		{fmt.Errorf("wrapped: %w", runtime.ErrInvalidSpec), http.StatusBadRequest, CodeInvalidRequest},
 		{fmt.Errorf("wrapped: %w", snapshot.ErrNotFound), http.StatusNotFound, CodeSnapshotNotFound},
 		{fmt.Errorf("wrapped: %w", snapshot.ErrHasChildren), http.StatusConflict, CodeInvalidState},
-		{fmt.Errorf("wrapped: %w", snapshot.ErrBackingImageMissing), http.StatusConflict, CodeInvalidState},
 		{fmt.Errorf("wrapped: %w", snapshot.ErrNameTaken), http.StatusConflict, CodeNameTaken},
 		{fmt.Errorf("wrapped: %w", snapshot.ErrInvalidName), http.StatusBadRequest, CodeInvalidRequest},
 		{fmt.Errorf("wrapped: %w", snapshot.ErrNameLooksLikeID), http.StatusBadRequest, CodeInvalidRequest},

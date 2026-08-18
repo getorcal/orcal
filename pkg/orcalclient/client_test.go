@@ -18,6 +18,7 @@ import (
 	"github.com/getorcal/orcal/internal/runtime"
 	"github.com/getorcal/orcal/internal/runtime/fake"
 	"github.com/getorcal/orcal/internal/sandbox"
+	"github.com/getorcal/orcal/internal/snapshot"
 	"github.com/getorcal/orcal/internal/store/sqlite"
 	"github.com/getorcal/orcal/pkg/orcalclient"
 )
@@ -40,10 +41,13 @@ func newClient(t *testing.T) (*orcalclient.Client, *fake.Fake, *exec.Service) {
 	if err != nil {
 		t.Fatalf("exec.NewService() error = %v", err)
 	}
+	snapshots := snapshot.NewService(st.Snapshots(), sandboxes, f)
+	sandboxes.SetSnapshots(snapshots)
 
 	srv := httptest.NewServer(api.NewServer(api.Options{
 		Sandboxes: sandboxes,
 		Execs:     execs,
+		Snapshots: snapshots,
 		TokenHash: auth.HashToken(token),
 		Version:   "test",
 		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),

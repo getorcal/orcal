@@ -113,8 +113,10 @@ func TestResponsesMatchTheOpenAPIContract(t *testing.T) {
 		{http.MethodPost, "/v1/sandboxes", map[string]any{"image": "alpine"}},
 		{http.MethodPost, "/v1/sandboxes", map[string]any{"name": "my-agent", "image": "alpine"}},
 		{http.MethodPost, "/v1/sandboxes", map[string]any{"name": "forked", "snapshot": "v1"}},
+		{http.MethodPost, "/v1/sandboxes", map[string]any{"name": "ghost-fork", "snapshot": "ghost-snapshot"}},
 		{http.MethodGet, "/v1/sandboxes/my-agent/snapshots", nil},
 		{http.MethodGet, "/v1/snapshots", nil},
+		{http.MethodGet, "/v1/snapshots?sandbox=ghost", nil},
 		{http.MethodGet, "/v1/snapshots/" + createdSnapshot.Id, nil},
 		{http.MethodPost, "/v1/sandboxes/my-agent/restore", map[string]any{"snapshot": "v1"}},
 		{http.MethodPost, "/v1/sandboxes/my-agent/start", nil},
@@ -131,11 +133,11 @@ func TestResponsesMatchTheOpenAPIContract(t *testing.T) {
 
 	createSandbox(t, h, "throwaway")
 	toDelete := decode[apigen.Snapshot](t, h.do(t, http.MethodPost, "/v1/sandboxes/throwaway/snapshots", map[string]any{"name": "disposable"}))
+	delResp, delReq, delBody := h.doCapturing(t, http.MethodDelete, "/v1/snapshots/"+toDelete.Id, nil)
+	if delResp.StatusCode != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", delResp.StatusCode)
+	}
 	t.Run("DELETE /v1/snapshots/{ref}", func(t *testing.T) {
-		resp := h.do(t, http.MethodDelete, "/v1/snapshots/"+toDelete.Id, nil)
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusNoContent {
-			t.Errorf("status = %d, want 204", resp.StatusCode)
-		}
+		assertMatchesContract(t, router, delReq, delResp, delBody)
 	})
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/getorcal/orcal/internal/runtime"
 	"github.com/getorcal/orcal/internal/runtime/fake"
 	"github.com/getorcal/orcal/internal/sandbox"
+	"github.com/getorcal/orcal/internal/snapshot"
 	"github.com/getorcal/orcal/internal/store/sqlite"
 )
 
@@ -43,10 +44,13 @@ func newCLIEnv(t *testing.T) *cliEnv {
 	if err != nil {
 		t.Fatalf("exec.NewService() error = %v", err)
 	}
+	snapshots := snapshot.NewService(st.Snapshots(), sandboxes, f)
+	sandboxes.SetSnapshots(snapshots)
 
 	srv := httptest.NewServer(api.NewServer(api.Options{
 		Sandboxes: sandboxes,
 		Execs:     execs,
+		Snapshots: snapshots,
 		TokenHash: auth.HashToken(cliToken),
 		Version:   "test",
 		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
