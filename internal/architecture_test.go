@@ -1,6 +1,7 @@
 package internal_test
 
 import (
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -24,4 +25,22 @@ func TestOnlyTheDockerAdapterImportsDocker(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestGoDirectiveIsPinnedToTheDependencyFloor(t *testing.T) {
+	data, err := os.ReadFile("../go.mod")
+	if err != nil {
+		t.Fatalf("read go.mod: %v", err)
+	}
+
+	const want = "go 1.23.0"
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "go ") {
+			if line != want {
+				t.Errorf("go.mod directive = %q, want %q; this floor is held down by modernc.org/sqlite v1.39.0, github.com/getkin/kin-openapi v0.135.0, the oapi-codegen generate directive, and the golang:1.23-alpine build image — raising it means re-validating all four together, not just bumping this line", line, want)
+			}
+			return
+		}
+	}
+	t.Fatal("go.mod has no go directive line")
 }

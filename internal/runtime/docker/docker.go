@@ -63,8 +63,12 @@ func (d *Docker) Create(ctx context.Context, spec runtime.CreateSpec) (string, e
 }
 
 func (d *Docker) ensureImage(ctx context.Context, ref string) error {
-	if _, err := d.cli.ImageInspect(ctx, ref); err == nil {
+	_, inspectErr := d.cli.ImageInspect(ctx, ref)
+	if inspectErr == nil {
 		return nil
+	}
+	if !errdefs.IsNotFound(inspectErr) {
+		return translate(inspectErr)
 	}
 	reader, err := d.cli.ImagePull(ctx, ref, image.PullOptions{})
 	if err != nil {
@@ -177,9 +181,11 @@ func translate(err error) error {
 		return fmt.Errorf("%w: %v", runtime.ErrNotFound, err)
 	case errdefs.IsConflict(err):
 		return fmt.Errorf("%w: %v", runtime.ErrConflict, err)
+	case errdefs.IsInvalidParameter(err):
+		return fmt.Errorf("%w: %v", runtime.ErrInvalidSpec, err)
 	case client.IsErrConnectionFailed(err), errdefs.IsUnavailable(err), errors.Is(err, context.DeadlineExceeded):
 		return fmt.Errorf("%w: %v", runtime.ErrUnavailable, err)
 	default:
-		return err
+		return fmt.Errorf("runtime: docker: %v", err)
 	}
 }

@@ -89,7 +89,7 @@ func (f *Fake) Destroy(ctx context.Context, id string) error {
 	defer f.mu.Unlock()
 	c, ok := f.containers[id]
 	if !ok {
-		return fmt.Errorf("%w: container %s", runtime.ErrNotFound, id)
+		return nil
 	}
 	c.state = runtime.ContainerGone
 	return nil
@@ -111,7 +111,7 @@ func (f *Fake) Inspect(ctx context.Context, id string) (runtime.Status, error) {
 	defer f.mu.Unlock()
 	c, ok := f.containers[id]
 	if !ok {
-		return runtime.Status{}, fmt.Errorf("%w: container %s", runtime.ErrNotFound, id)
+		return runtime.Status{State: runtime.ContainerGone}, nil
 	}
 	return runtime.Status{State: c.state}, nil
 }

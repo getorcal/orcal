@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/getorcal/orcal/internal/runtime"
 )
@@ -63,5 +64,42 @@ func TestDemuxReturnsEOFOnTruncatedHeader(t *testing.T) {
 
 	if _, err := next(); err == nil {
 		t.Fatal("error = nil, want a read error on a truncated header")
+	}
+}
+
+func TestDemuxRejectsOversizedFrame(t *testing.T) {
+	header := make([]byte, 8)
+	header[0] = 1
+	binary.BigEndian.PutUint32(header[4:], 1<<30)
+	next := demux(bytes.NewReader(header))
+
+	if _, err := next(); err == nil {
+		t.Fatal("error = nil, want rejection of an oversized frame")
+	}
+}
+
+func TestDemuxRejectsOversizedFrameWithoutReadingPayload(t *testing.T) {
+	pr, pw := io.Pipe()
+	header := make([]byte, 8)
+	header[0] = 1
+	binary.BigEndian.PutUint32(header[4:], 1<<30)
+	go func() {
+		pw.Write(header)
+	}()
+	next := demux(pr)
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := next()
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("error = nil, want rejection of an oversized frame")
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("demux blocked reading an oversized payload instead of rejecting the size header")
 	}
 }

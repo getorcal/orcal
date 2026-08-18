@@ -9,6 +9,7 @@ import (
 )
 
 const dockerHeaderSize = 8
+const maxFramePayload = 16 << 20
 
 func demux(r io.Reader) func() (runtime.Frame, error) {
 	header := make([]byte, dockerHeaderSize)
@@ -20,6 +21,9 @@ func demux(r io.Reader) func() (runtime.Frame, error) {
 			return runtime.Frame{}, err
 		}
 		size := binary.BigEndian.Uint32(header[4:])
+		if size > maxFramePayload {
+			return runtime.Frame{}, fmt.Errorf("docker: frame payload %d exceeds max %d", size, maxFramePayload)
+		}
 		data := make([]byte, size)
 		if _, err := io.ReadFull(r, data); err != nil {
 			return runtime.Frame{}, fmt.Errorf("docker: truncated stream payload: %w", err)

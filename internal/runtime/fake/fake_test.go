@@ -42,11 +42,35 @@ func TestCreateStartInspectDestroy(t *testing.T) {
 	}
 }
 
-func TestInspectUnknownReturnsErrNotFound(t *testing.T) {
+func TestInspectUnknownReturnsGone(t *testing.T) {
 	f := New()
-	_, err := f.Inspect(context.Background(), "nope")
-	if !errors.Is(err, runtime.ErrNotFound) {
-		t.Errorf("Inspect() error = %v, want ErrNotFound", err)
+	st, err := f.Inspect(context.Background(), "nope")
+	if err != nil {
+		t.Errorf("Inspect() error = %v, want nil", err)
+	}
+	if st.State != runtime.ContainerGone {
+		t.Errorf("Inspect() state = %s, want gone", st.State)
+	}
+}
+
+func TestDestroyUnknownReturnsNil(t *testing.T) {
+	f := New()
+	if err := f.Destroy(context.Background(), "nope"); err != nil {
+		t.Errorf("Destroy() error = %v, want nil", err)
+	}
+}
+
+func TestStartOnUnknownContainerReturnsErrNotFound(t *testing.T) {
+	f := New()
+	if err := f.Start(context.Background(), "nope"); !errors.Is(err, runtime.ErrNotFound) {
+		t.Errorf("Start() error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestStopOnUnknownContainerReturnsErrNotFound(t *testing.T) {
+	f := New()
+	if err := f.Stop(context.Background(), "nope", time.Second); !errors.Is(err, runtime.ErrNotFound) {
+		t.Errorf("Stop() error = %v, want ErrNotFound", err)
 	}
 }
 
