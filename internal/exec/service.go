@@ -14,6 +14,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const reconcilePollInterval = 500 * time.Millisecond
+
 type SandboxLookup interface {
 	RuntimeID(ctx context.Context, sandboxID string) (string, error)
 }
@@ -194,6 +196,78 @@ func (s *Service) Get(ctx context.Context, id string) (*Exec, error) {
 
 func (s *Service) ListBySandbox(ctx context.Context, sandboxID string, f Filter) ([]*Exec, error) {
 	return s.repo.ListBySandbox(ctx, sandboxID, f)
+}
+
+func (s *Service) Reconcile(ctx context.Context) error {
+	running, err := s.repo.ListRunning(ctx)
+	if err != nil {
+		return fmt.Errorf("exec: list running execs: %w", err)
+	}
+
+	for _, e := range running {
+		if e.RuntimeExecID == "" {
+			s.finish(ctx, e.ID, nil, e.OutputBytes, e.Truncated, StateFailed)
+			continue
+		}
+
+		status, err := s.rt.InspectExec(ctx, e.RuntimeExecID)
+		if err != nil {
+			s.finish(ctx, e.ID, nil, e.OutputBytes, e.Truncated, StateFailed)
+			continue
+		}
+
+		s.appendGap(e.ID)
+
+		if !status.Running {
+			s.finish(ctx, e.ID, status.ExitCode, s.logSize(e.ID), e.Truncated, StateExited)
+			s.bcast.Notify(e.ID)
+			continue
+		}
+
+		s.wg.Add(1)
+		go s.pollUntilExit(e.ID, e.RuntimeExecID, e.Truncated)
+	}
+	return nil
+}
+
+func (s *Service) appendGap(execID string) {
+	writer, err := NewLogWriter(s.LogPath(execID), s.maxBytes)
+	if err != nil {
+		return
+	}
+	defer writer.Close()
+	writer.Append(LogGap, nil)
+	s.bcast.Notify(execID)
+}
+
+func (s *Service) logSize(execID string) int64 {
+	info, err := os.Stat(s.LogPath(execID))
+	if err != nil {
+		return 0
+	}
+	return info.Size()
+}
+
+func (s *Service) pollUntilExit(execID, runtimeExecID string, truncated bool) {
+	defer s.wg.Done()
+
+	ctx := context.Background()
+	ticker := time.NewTicker(reconcilePollInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		status, err := s.rt.InspectExec(ctx, runtimeExecID)
+		if err != nil {
+			s.finish(ctx, execID, nil, s.logSize(execID), truncated, StateFailed)
+			s.bcast.Notify(execID)
+			return
+		}
+		if !status.Running {
+			s.finish(ctx, execID, status.ExitCode, s.logSize(execID), truncated, StateExited)
+			s.bcast.Notify(execID)
+			return
+		}
+	}
 }
 
 func toLogStream(stream runtime.Stream) LogStream {
