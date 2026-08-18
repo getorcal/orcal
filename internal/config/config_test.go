@@ -61,3 +61,31 @@ func TestLoadRejectsNonNumericByteLimit(t *testing.T) {
 		t.Fatal("Load() error = nil, want error for non-numeric limit")
 	}
 }
+
+func TestLoadRejectsAZeroOutputByteLimit(t *testing.T) {
+	t.Setenv("ORCAL_EXEC_OUTPUT_MAX_BYTES", "0")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() error = nil, want an error - a zero limit captures no output at all")
+	}
+}
+
+func TestLoadRejectsNonPositiveNumericSettings(t *testing.T) {
+	keys := []string{
+		"ORCAL_EXEC_OUTPUT_MAX_BYTES",
+		"ORCAL_DEFAULT_CPU_MILLIS",
+		"ORCAL_DEFAULT_MEMORY_BYTES",
+		"ORCAL_DEFAULT_PIDS_LIMIT",
+	}
+	for _, key := range keys {
+		for _, value := range []string{"0", "-1"} {
+			t.Run(key+"="+value, func(t *testing.T) {
+				t.Setenv(key, value)
+
+				if _, err := Load(); err == nil {
+					t.Fatalf("Load() error = nil, want an error for %s=%s", key, value)
+				}
+			})
+		}
+	}
+}

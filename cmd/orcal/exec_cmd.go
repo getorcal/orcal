@@ -1,11 +1,21 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 
 	"github.com/getorcal/orcal/pkg/orcalclient"
 	"github.com/spf13/cobra"
 )
+
+var errStopStream = errors.New("orcal: stop reading the output stream")
+
+type streamOutcome struct {
+	sawExit bool
+	code    int
+	offset  int64
+}
 
 func (a *app) execCmd() *cobra.Command {
 	var (
@@ -26,12 +36,12 @@ func (a *app) execCmd() *cobra.Command {
 				User:       user,
 			})
 			if err != nil {
-				return err
+				return asSelfFailure(err)
 			}
 			if detach {
-				return renderExec(a.stdout, a.settings.Output, started)
+				return asSelfFailure(renderExec(a.stdout, a.settings.Output, started))
 			}
-			return a.streamAndExit(cmd, started.Id, 0)
+			return asSelfFailure(a.streamAndExit(cmd.Context(), started.Id, 0))
 		}),
 	}
 	cmd.Flags().BoolVar(&detach, "detach", false, "return the exec id without streaming")
@@ -56,38 +66,65 @@ func (a *app) diagnostic(kind, message string) error {
 	return err
 }
 
-func (a *app) streamAndExit(cmd *cobra.Command, execID string, from int64) error {
-	code := 0
-	err := a.client.StreamOutput(cmd.Context(), execID, from, func(e orcalclient.OutputEvent) error {
+func (a *app) streamAndExit(ctx context.Context, execID string, from int64) error {
+	out, err := a.stream(ctx, execID, from, -1)
+	if err != nil {
+		return err
+	}
+	if !out.sawExit {
+		if diagErr := a.diagnostic("stream_ended", fmt.Sprintf(
+			"output stream ended without an exit event; the command's exit status is unknown, treating as an orcal failure (exit %d)",
+			exitSelf)); diagErr != nil {
+			return diagErr
+		}
+		return execExitError(exitSelf)
+	}
+	if out.code != 0 {
+		return execExitError(out.code)
+	}
+	return nil
+}
+
+func (a *app) stream(ctx context.Context, execID string, from, stopAt int64) (streamOutcome, error) {
+	out := streamOutcome{offset: from}
+	err := a.client.StreamOutput(ctx, execID, from, func(e orcalclient.OutputEvent) error {
 		switch e.Event {
 		case "output":
 			target := a.stdout
 			if e.Stream == "stderr" {
 				target = a.stderr
 			}
-			_, writeErr := target.Write(e.Data)
-			return writeErr
+			if _, writeErr := target.Write(e.Data); writeErr != nil {
+				return writeErr
+			}
+			out.offset = e.Offset
 		case "gap":
-			return a.diagnostic("gap", "output gap - the daemon restarted during this exec, output is incomplete")
+			out.offset = e.Offset
+			if diagErr := a.diagnostic("gap",
+				"output gap - the daemon restarted during this exec, output is incomplete"); diagErr != nil {
+				return diagErr
+			}
 		case "exit":
+			out.sawExit = true
 			if e.Truncated {
-				if err := a.diagnostic("truncated", "output truncated at the configured limit"); err != nil {
-					return err
+				if diagErr := a.diagnostic("truncated", "output truncated at the configured limit"); diagErr != nil {
+					return diagErr
 				}
 			}
-			code = execOutputExitCode(e)
+			out.code = execOutputExitCode(e)
 			if e.ExitCode == nil {
 				return a.diagnostic("exec_failed", fmt.Sprintf(
 					"exec ended in state %q without an exit code; treating as an orcal failure (exit %d)", e.State, exitSelf))
 			}
+			return nil
+		}
+		if stopAt >= 0 && out.offset >= stopAt {
+			return errStopStream
 		}
 		return nil
 	})
-	if err != nil {
-		return err
+	if err != nil && !errors.Is(err, errStopStream) {
+		return out, err
 	}
-	if code != 0 {
-		return execExitError(code)
-	}
-	return nil
+	return out, nil
 }

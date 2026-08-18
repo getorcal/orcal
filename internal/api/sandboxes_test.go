@@ -152,6 +152,33 @@ func TestCreateSandboxWithoutImageReturns400InvalidRequest(t *testing.T) {
 	}
 }
 
+func TestCreateSandboxWithNegativeResourceLimitsReturns400InvalidRequest(t *testing.T) {
+	cases := []struct {
+		name  string
+		field string
+	}{
+		{"negative pids limit", "pids_limit"},
+		{"negative cpu millis", "cpu_millis"},
+		{"negative memory bytes", "memory_bytes"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			h := newHarness(t)
+
+			resp := h.do(t, http.MethodPost, "/v1/sandboxes", map[string]any{"image": "alpine", c.field: -1})
+
+			if resp.StatusCode != http.StatusBadRequest {
+				resp.Body.Close()
+				t.Fatalf("status = %d, want 400 for %s = -1", resp.StatusCode, c.field)
+			}
+			body := decode[apigen.Error](t, resp)
+			if body.Error.Code != "invalid_request" {
+				t.Errorf("code = %q, want invalid_request", body.Error.Code)
+			}
+		})
+	}
+}
+
 func TestCreateSandboxWithDuplicateNameReturns409NameTaken(t *testing.T) {
 	h := newHarness(t)
 	createSandbox(t, h, "my-agent")

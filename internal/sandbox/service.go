@@ -51,6 +51,9 @@ func (s *Service) Create(ctx context.Context, opts CreateOptions) (*Sandbox, err
 			return nil, err
 		}
 	}
+	if err := validateResources(opts.Resources); err != nil {
+		return nil, err
+	}
 
 	res := opts.Resources
 	if res.CPUMillis == 0 {
@@ -109,12 +112,33 @@ func (s *Service) Create(ctx context.Context, opts CreateOptions) (*Sandbox, err
 		return nil, s.markError(ctx, sb, err)
 	}
 
+	status, err := s.rt.Inspect(ctx, runtimeID)
+	if err != nil {
+		return nil, s.markError(ctx, sb, err)
+	}
+	if status.State != runtime.ContainerRunning {
+		return nil, s.markError(ctx, sb, fmt.Errorf(
+			"%w: the container for image %q exited immediately after start", ErrInvalidImage, sb.Image))
+	}
+
 	sb.State = StateRunning
 	sb.UpdatedAt = s.now()
 	if err := s.repo.Update(ctx, sb); err != nil {
 		return nil, err
 	}
 	return sb, nil
+}
+
+func validateResources(r Resources) error {
+	switch {
+	case r.CPUMillis < 0:
+		return fmt.Errorf("%w: cpu_millis must not be negative", ErrInvalidResources)
+	case r.MemoryBytes < 0:
+		return fmt.Errorf("%w: memory_bytes must not be negative", ErrInvalidResources)
+	case r.PidsLimit < 0:
+		return fmt.Errorf("%w: pids_limit must not be negative", ErrInvalidResources)
+	}
+	return nil
 }
 
 func (s *Service) markError(ctx context.Context, sb *Sandbox, cause error) error {

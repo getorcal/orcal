@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -396,5 +397,47 @@ func TestCreateSerializesAgainstConcurrentStart(t *testing.T) {
 			}
 		}
 		st.Close()
+	}
+}
+
+func TestCreateMarksSandboxErroredWhenTheContainerExitsImmediately(t *testing.T) {
+	svc, f := newService(t)
+	f.SetExitAfterStart(true)
+
+	_, err := svc.Create(context.Background(), sandbox.CreateOptions{Name: "doomed", Image: "scratch"})
+	if err == nil {
+		t.Fatal("Create() error = nil, want a failure for an image whose command exits immediately")
+	}
+	if !strings.Contains(err.Error(), "exited immediately") {
+		t.Errorf("Create() error = %v, want it to say the image's command exited immediately", err)
+	}
+
+	s, getErr := svc.Get(context.Background(), "doomed")
+	if getErr != nil {
+		t.Fatalf("Get() error = %v, want the errored record to be readable", getErr)
+	}
+	if s.State != sandbox.StateError {
+		t.Errorf("State = %s, want error - a dead container must never be recorded running", s.State)
+	}
+}
+
+func TestCreateRejectsNegativeResourceLimits(t *testing.T) {
+	cases := []struct {
+		name string
+		res  sandbox.Resources
+	}{
+		{"pids limit", sandbox.Resources{PidsLimit: -1}},
+		{"cpu millis", sandbox.Resources{CPUMillis: -1}},
+		{"memory bytes", sandbox.Resources{MemoryBytes: -1}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			svc, _ := newService(t)
+
+			_, err := svc.Create(context.Background(), sandbox.CreateOptions{Image: "alpine", Resources: c.res})
+			if !errors.Is(err, sandbox.ErrInvalidResources) {
+				t.Errorf("Create() error = %v, want ErrInvalidResources", err)
+			}
+		})
 	}
 }

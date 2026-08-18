@@ -199,9 +199,9 @@ components:
       type: object
       required: [cpu_millis, memory_bytes, pids_limit]
       properties:
-        cpu_millis: { type: integer }
-        memory_bytes: { type: integer, format: int64 }
-        pids_limit: { type: integer }
+        cpu_millis: { type: integer, minimum: 1 }
+        memory_bytes: { type: integer, format: int64, minimum: 1 }
+        pids_limit: { type: integer, minimum: 1 }
     Sandbox:
       type: object
       required: [id, image, state, runtime, resources, created_at, updated_at]
@@ -236,9 +236,9 @@ components:
       properties:
         name: { type: string }
         image: { type: string }
-        cpu_millis: { type: integer }
-        memory_bytes: { type: integer, format: int64 }
-        pids_limit: { type: integer }
+        cpu_millis: { type: integer, minimum: 1 }
+        memory_bytes: { type: integer, format: int64, minimum: 1 }
+        pids_limit: { type: integer, minimum: 1 }
         env:
           type: object
           additionalProperties: { type: string }

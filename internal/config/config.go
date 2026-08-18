@@ -28,18 +28,18 @@ func Load() (Config, error) {
 	}
 
 	var err error
-	if c.ExecOutputMaxBytes, err = envInt64("ORCAL_EXEC_OUTPUT_MAX_BYTES", 67108864); err != nil {
+	if c.ExecOutputMaxBytes, err = envPositiveInt64("ORCAL_EXEC_OUTPUT_MAX_BYTES", 67108864); err != nil {
 		return Config{}, err
 	}
-	if c.DefaultMemoryBytes, err = envInt64("ORCAL_DEFAULT_MEMORY_BYTES", 1073741824); err != nil {
+	if c.DefaultMemoryBytes, err = envPositiveInt64("ORCAL_DEFAULT_MEMORY_BYTES", 1073741824); err != nil {
 		return Config{}, err
 	}
-	cpu, err := envInt64("ORCAL_DEFAULT_CPU_MILLIS", 1000)
+	cpu, err := envPositiveInt64("ORCAL_DEFAULT_CPU_MILLIS", 1000)
 	if err != nil {
 		return Config{}, err
 	}
 	c.DefaultCPUMillis = int(cpu)
-	pids, err := envInt64("ORCAL_DEFAULT_PIDS_LIMIT", 512)
+	pids, err := envPositiveInt64("ORCAL_DEFAULT_PIDS_LIMIT", 512)
 	if err != nil {
 		return Config{}, err
 	}
@@ -63,6 +63,17 @@ func envInt64(key string, fallback int64) (int64, error) {
 	n, err := strconv.ParseInt(v, 10, 64)
 	if err != nil {
 		return 0, fmt.Errorf("config: %s must be an integer: %w", key, err)
+	}
+	return n, nil
+}
+
+func envPositiveInt64(key string, fallback int64) (int64, error) {
+	n, err := envInt64(key, fallback)
+	if err != nil {
+		return 0, err
+	}
+	if n < 1 {
+		return 0, fmt.Errorf("config: %s must be greater than zero, got %d", key, n)
 	}
 	return n, nil
 }

@@ -29,6 +29,7 @@ type Fake struct {
 	exitCode       int
 	createErr      error
 	execErr        error
+	exitAfterStart bool
 	lastCreateSpec runtime.CreateSpec
 }
 
@@ -58,6 +59,12 @@ func (f *Fake) SetExecError(err error) {
 	f.execErr = err
 }
 
+func (f *Fake) SetExitAfterStart(exits bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.exitAfterStart = exits
+}
+
 func (f *Fake) LastCreateSpec() runtime.CreateSpec {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -77,6 +84,12 @@ func (f *Fake) Create(ctx context.Context, spec runtime.CreateSpec) (string, err
 }
 
 func (f *Fake) Start(ctx context.Context, id string) error {
+	f.mu.Lock()
+	exits := f.exitAfterStart
+	f.mu.Unlock()
+	if exits {
+		return f.transition(id, runtime.ContainerStopped)
+	}
 	return f.transition(id, runtime.ContainerRunning)
 }
 

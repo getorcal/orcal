@@ -22,24 +22,49 @@ const (
 	exitSelf     = 125
 )
 
+type selfFailure struct{ err error }
+
+func (e selfFailure) Error() string { return e.err.Error() }
+
+func (e selfFailure) Unwrap() error { return e.err }
+
+func asSelfFailure(err error) error {
+	if err == nil {
+		return nil
+	}
+	var apiErr *orcalclient.APIError
+	if errors.As(err, &apiErr) {
+		return err
+	}
+	var exit execExitError
+	if errors.As(err, &exit) {
+		return err
+	}
+	return selfFailure{err: err}
+}
+
 func exitCode(err error) int {
 	if err == nil {
 		return exitOK
 	}
 	var apiErr *orcalclient.APIError
-	if !errors.As(err, &apiErr) {
-		return exitError
+	if errors.As(err, &apiErr) {
+		switch apiErr.Code {
+		case "sandbox_not_found", "exec_not_found":
+			return exitNotFound
+		case "unauthorized":
+			return exitAuth
+		case "invalid_request":
+			return exitUsage
+		default:
+			return exitError
+		}
 	}
-	switch apiErr.Code {
-	case "sandbox_not_found", "exec_not_found":
-		return exitNotFound
-	case "unauthorized":
-		return exitAuth
-	case "invalid_request":
-		return exitUsage
-	default:
-		return exitError
+	var self selfFailure
+	if errors.As(err, &self) {
+		return exitSelf
 	}
+	return exitError
 }
 
 func renderJSON(w io.Writer, value any) error {
