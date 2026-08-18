@@ -80,6 +80,26 @@ func (h *harness) do(t *testing.T, method, path string, body any) *http.Response
 	return resp
 }
 
+func (h *harness) doCapturing(t *testing.T, method, path string, body any) (*http.Response, *http.Request, []byte) {
+	t.Helper()
+	resp := h.do(t, method, path, body)
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+
+	validated, err := http.NewRequest(method, "http://api"+path, nil)
+	if err != nil {
+		t.Fatalf("build validation request: %v", err)
+	}
+	return resp, validated, raw
+}
+
+func readCloser(b []byte) io.ReadCloser {
+	return io.NopCloser(bytes.NewReader(b))
+}
+
 func decode[T any](t *testing.T, resp *http.Response) T {
 	t.Helper()
 	defer resp.Body.Close()
