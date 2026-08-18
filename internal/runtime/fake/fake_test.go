@@ -240,4 +240,123 @@ func TestLastCreateSpecUnaffectedByFailedCreate(t *testing.T) {
 	}
 }
 
+func TestSnapshotReturnsRefAndSize(t *testing.T) {
+	f := New()
+	ctx := context.Background()
+	id, _ := f.Create(ctx, runtime.CreateSpec{Image: "alpine"})
+	f.Start(ctx, id)
+
+	info, err := f.Snapshot(ctx, id)
+	if err != nil {
+		t.Fatalf("Snapshot() error = %v", err)
+	}
+	if info.Ref == "" {
+		t.Error("Ref is empty")
+	}
+	if info.SizeBytes <= 0 {
+		t.Errorf("SizeBytes = %d, want positive", info.SizeBytes)
+	}
+}
+
+func TestSnapshotLeavesContainerRunning(t *testing.T) {
+	f := New()
+	ctx := context.Background()
+	id, _ := f.Create(ctx, runtime.CreateSpec{Image: "alpine"})
+	f.Start(ctx, id)
+
+	f.Snapshot(ctx, id)
+
+	st, _ := f.Inspect(ctx, id)
+	if st.State != runtime.ContainerRunning {
+		t.Errorf("state after snapshot = %s, want running", st.State)
+	}
+}
+
+func TestSnapshotLeavesContainerUnpausedWhenItFails(t *testing.T) {
+	f := New()
+	ctx := context.Background()
+	id, _ := f.Create(ctx, runtime.CreateSpec{Image: "alpine"})
+	f.Start(ctx, id)
+	f.SetSnapshotError(errors.New("commit exploded"))
+
+	if _, err := f.Snapshot(ctx, id); err == nil {
+		t.Fatal("Snapshot() error = nil, want the injected failure")
+	}
+
+	st, _ := f.Inspect(ctx, id)
+	if st.State == runtime.ContainerPaused {
+		t.Error("container left paused after a failed snapshot")
+	}
+	if st.State != runtime.ContainerRunning {
+		t.Errorf("state = %s, want running", st.State)
+	}
+}
+
+func TestSnapshotOfAStoppedContainerSucceeds(t *testing.T) {
+	f := New()
+	ctx := context.Background()
+	id, _ := f.Create(ctx, runtime.CreateSpec{Image: "alpine"})
+
+	if _, err := f.Snapshot(ctx, id); err != nil {
+		t.Fatalf("Snapshot() on stopped container error = %v", err)
+	}
+	st, _ := f.Inspect(ctx, id)
+	if st.State != runtime.ContainerStopped {
+		t.Errorf("state = %s, want stopped", st.State)
+	}
+}
+
+func TestSnapshotOfUnknownContainerReturnsErrNotFound(t *testing.T) {
+	f := New()
+	if _, err := f.Snapshot(context.Background(), "nope"); !errors.Is(err, runtime.ErrNotFound) {
+		t.Errorf("Snapshot() error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestDeleteSnapshotRefusesWhileAContainerUsesIt(t *testing.T) {
+	f := New()
+	ctx := context.Background()
+	id, _ := f.Create(ctx, runtime.CreateSpec{Image: "alpine"})
+	f.Start(ctx, id)
+	info, _ := f.Snapshot(ctx, id)
+
+	f.Create(ctx, runtime.CreateSpec{Image: info.Ref})
+
+	if err := f.DeleteSnapshot(ctx, info.Ref); !errors.Is(err, runtime.ErrConflict) {
+		t.Errorf("DeleteSnapshot() error = %v, want ErrConflict", err)
+	}
+}
+
+func TestDeleteSnapshotSucceedsWhenUnused(t *testing.T) {
+	f := New()
+	ctx := context.Background()
+	id, _ := f.Create(ctx, runtime.CreateSpec{Image: "alpine"})
+	f.Start(ctx, id)
+	info, _ := f.Snapshot(ctx, id)
+
+	if err := f.DeleteSnapshot(ctx, info.Ref); err != nil {
+		t.Errorf("DeleteSnapshot() error = %v, want nil", err)
+	}
+}
+
+func TestUnpauseRestoresARunningContainer(t *testing.T) {
+	f := New()
+	ctx := context.Background()
+	id, _ := f.Create(ctx, runtime.CreateSpec{Image: "alpine"})
+	f.Start(ctx, id)
+	f.ForcePaused(id)
+
+	st, _ := f.Inspect(ctx, id)
+	if st.State != runtime.ContainerPaused {
+		t.Fatalf("state = %s, want paused", st.State)
+	}
+	if err := f.Unpause(ctx, id); err != nil {
+		t.Fatalf("Unpause() error = %v", err)
+	}
+	st, _ = f.Inspect(ctx, id)
+	if st.State != runtime.ContainerRunning {
+		t.Errorf("state after unpause = %s, want running", st.State)
+	}
+}
+
 var _ runtime.Runtime = (*Fake)(nil)

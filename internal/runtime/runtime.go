@@ -39,9 +39,15 @@ type ContainerState string
 
 const (
 	ContainerRunning ContainerState = "running"
+	ContainerPaused  ContainerState = "paused"
 	ContainerStopped ContainerState = "stopped"
 	ContainerGone    ContainerState = "gone"
 )
+
+type SnapshotInfo struct {
+	Ref       string
+	SizeBytes int64
+}
 
 type Status struct {
 	State    ContainerState
@@ -68,4 +74,7 @@ type Runtime interface {
 	Inspect(ctx context.Context, runtimeID string) (Status, error)
 	Exec(ctx context.Context, runtimeID string, spec ExecSpec) (Session, error)
 	InspectExec(ctx context.Context, execRuntimeID string) (ExecStatus, error)
+	Snapshot(ctx context.Context, runtimeID string) (SnapshotInfo, error)
+	DeleteSnapshot(ctx context.Context, ref string) error
+	Unpause(ctx context.Context, runtimeID string) error
 }

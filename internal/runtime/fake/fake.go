@@ -31,12 +31,16 @@ type Fake struct {
 	execErr        error
 	exitAfterStart bool
 	lastCreateSpec runtime.CreateSpec
+	snapshots      map[string]int64
+	snapshotErr    error
+	snapshotSeq    int
 }
 
 func New() *Fake {
 	return &Fake{
 		containers: make(map[string]*container),
 		sessions:   make(map[string]*session),
+		snapshots:  make(map[string]int64),
 	}
 }
 
@@ -63,6 +67,20 @@ func (f *Fake) SetExitAfterStart(exits bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.exitAfterStart = exits
+}
+
+func (f *Fake) SetSnapshotError(err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.snapshotErr = err
+}
+
+func (f *Fake) ForcePaused(id string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if c, ok := f.containers[id]; ok {
+		c.state = runtime.ContainerPaused
+	}
 }
 
 func (f *Fake) LastCreateSpec() runtime.CreateSpec {
@@ -155,6 +173,60 @@ func (f *Fake) InspectExec(ctx context.Context, execID string) (runtime.ExecStat
 		return runtime.ExecStatus{}, fmt.Errorf("%w: exec %s", runtime.ErrNotFound, execID)
 	}
 	return s.status(), nil
+}
+
+func (f *Fake) Snapshot(ctx context.Context, id string) (runtime.SnapshotInfo, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	c, ok := f.containers[id]
+	if !ok || c.state == runtime.ContainerGone {
+		return runtime.SnapshotInfo{}, fmt.Errorf("%w: container %s", runtime.ErrNotFound, id)
+	}
+
+	restore := c.state
+	if c.state == runtime.ContainerRunning {
+		c.state = runtime.ContainerPaused
+	}
+	defer func() { c.state = restore }()
+
+	if f.snapshotErr != nil {
+		return runtime.SnapshotInfo{}, f.snapshotErr
+	}
+
+	f.snapshotSeq++
+	ref := fmt.Sprintf("sha256:fake%d", f.snapshotSeq)
+	f.snapshots[ref] = 1024
+	return runtime.SnapshotInfo{Ref: ref, SizeBytes: 1024}, nil
+}
+
+func (f *Fake) DeleteSnapshot(ctx context.Context, ref string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if _, ok := f.snapshots[ref]; !ok {
+		return fmt.Errorf("%w: snapshot %s", runtime.ErrNotFound, ref)
+	}
+	for _, c := range f.containers {
+		if c.spec.Image == ref && c.state != runtime.ContainerGone {
+			return fmt.Errorf("%w: snapshot %s is in use", runtime.ErrConflict, ref)
+		}
+	}
+	delete(f.snapshots, ref)
+	return nil
+}
+
+func (f *Fake) Unpause(ctx context.Context, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c, ok := f.containers[id]
+	if !ok || c.state == runtime.ContainerGone {
+		return fmt.Errorf("%w: container %s", runtime.ErrNotFound, id)
+	}
+	if c.state == runtime.ContainerPaused {
+		c.state = runtime.ContainerRunning
+	}
+	return nil
 }
 
 type session struct {

@@ -159,6 +159,56 @@ func (d *Docker) InspectExec(ctx context.Context, execID string) (runtime.ExecSt
 	return status, nil
 }
 
+func (d *Docker) Snapshot(ctx context.Context, id string) (runtime.SnapshotInfo, error) {
+	info, err := d.cli.ContainerInspect(ctx, id)
+	if errdefs.IsNotFound(err) {
+		return runtime.SnapshotInfo{}, fmt.Errorf("%w: container %s", runtime.ErrNotFound, id)
+	}
+	if err != nil {
+		return runtime.SnapshotInfo{}, translate(err)
+	}
+
+	wasRunning := info.State != nil && info.State.Running && !info.State.Paused
+	if wasRunning {
+		if err := d.cli.ContainerPause(ctx, id); err != nil {
+			return runtime.SnapshotInfo{}, translate(err)
+		}
+		defer func() {
+			d.cli.ContainerUnpause(context.WithoutCancel(ctx), id)
+		}()
+	}
+
+	committed, err := d.cli.ContainerCommit(ctx, id, container.CommitOptions{})
+	if err != nil {
+		return runtime.SnapshotInfo{}, translate(err)
+	}
+
+	inspected, err := d.cli.ImageInspect(ctx, committed.ID)
+	if err != nil {
+		return runtime.SnapshotInfo{Ref: committed.ID}, nil
+	}
+	return runtime.SnapshotInfo{Ref: committed.ID, SizeBytes: inspected.Size}, nil
+}
+
+func (d *Docker) DeleteSnapshot(ctx context.Context, ref string) error {
+	_, err := d.cli.ImageRemove(ctx, ref, image.RemoveOptions{})
+	if errdefs.IsNotFound(err) {
+		return fmt.Errorf("%w: snapshot %s", runtime.ErrNotFound, ref)
+	}
+	return translate(err)
+}
+
+func (d *Docker) Unpause(ctx context.Context, id string) error {
+	err := d.cli.ContainerUnpause(ctx, id)
+	if errdefs.IsNotFound(err) {
+		return fmt.Errorf("%w: container %s", runtime.ErrNotFound, id)
+	}
+	if errdefs.IsConflict(err) {
+		return nil
+	}
+	return translate(err)
+}
+
 func (d *Docker) DiskQuotaSupported(ctx context.Context) (bool, error) {
 	info, err := d.cli.Info(ctx)
 	if err != nil {
