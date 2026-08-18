@@ -9,6 +9,7 @@ import (
 
 	"github.com/getorcal/orcal/internal/exec"
 	"github.com/getorcal/orcal/internal/sandbox"
+	"github.com/getorcal/orcal/internal/snapshot"
 	_ "modernc.org/sqlite"
 )
 
@@ -76,6 +77,8 @@ func (s *Store) migrate(ctx context.Context) error {
 func (s *Store) Sandboxes() sandbox.Repo { return &sandboxRepo{db: s.db} }
 
 func (s *Store) Execs() exec.Repo { return &execRepo{db: s.db} }
+
+func (s *Store) Snapshots() snapshot.Repo { return &snapshotRepo{db: s.db} }
 
 func (s *Store) Settings() *SettingsStore { return &SettingsStore{db: s.db} }
 

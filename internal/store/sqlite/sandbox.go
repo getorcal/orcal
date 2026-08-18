@@ -17,7 +17,7 @@ type sandboxRepo struct {
 	db *sql.DB
 }
 
-const sandboxColumns = `id, name, image, state, runtime, runtime_id, cpu_millis, memory_bytes, pids_limit, env, labels, created_at, updated_at`
+const sandboxColumns = `id, name, image, state, runtime, runtime_id, cpu_millis, memory_bytes, pids_limit, env, labels, created_at, updated_at, parent_snapshot_id`
 
 func (r *sandboxRepo) Create(ctx context.Context, s *sandbox.Sandbox) error {
 	env, err := json.Marshal(s.Env)
@@ -29,11 +29,11 @@ func (r *sandboxRepo) Create(ctx context.Context, s *sandbox.Sandbox) error {
 		return fmt.Errorf("sqlite: encode labels: %w", err)
 	}
 	_, err = r.db.ExecContext(ctx,
-		`INSERT INTO sandboxes (`+sandboxColumns+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		`INSERT INTO sandboxes (`+sandboxColumns+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		s.ID, s.Name, s.Image, string(s.State), s.Runtime, s.RuntimeID,
 		s.Resources.CPUMillis, s.Resources.MemoryBytes, s.Resources.PidsLimit,
 		string(env), string(labels),
-		s.CreatedAt.Format(timeFormat), s.UpdatedAt.Format(timeFormat))
+		s.CreatedAt.Format(timeFormat), s.UpdatedAt.Format(timeFormat), s.ParentSnapshotID)
 	if err != nil {
 		if isNameUniqueViolation(err) {
 			return fmt.Errorf("%w: %s", sandbox.ErrNameTaken, s.Name)
@@ -110,10 +110,10 @@ func (r *sandboxRepo) Update(ctx context.Context, s *sandbox.Sandbox) error {
 	env, _ := json.Marshal(s.Env)
 	labels, _ := json.Marshal(s.Labels)
 	res, err := r.db.ExecContext(ctx,
-		`UPDATE sandboxes SET name=?, image=?, state=?, runtime=?, runtime_id=?, cpu_millis=?, memory_bytes=?, pids_limit=?, env=?, labels=?, updated_at=? WHERE id=?`,
+		`UPDATE sandboxes SET name=?, image=?, state=?, runtime=?, runtime_id=?, cpu_millis=?, memory_bytes=?, pids_limit=?, env=?, labels=?, updated_at=?, parent_snapshot_id=? WHERE id=?`,
 		s.Name, s.Image, string(s.State), s.Runtime, s.RuntimeID,
 		s.Resources.CPUMillis, s.Resources.MemoryBytes, s.Resources.PidsLimit,
-		string(env), string(labels), s.UpdatedAt.Format(timeFormat), s.ID)
+		string(env), string(labels), s.UpdatedAt.Format(timeFormat), s.ParentSnapshotID, s.ID)
 	if err != nil {
 		if isNameUniqueViolation(err) {
 			return fmt.Errorf("%w: %s", sandbox.ErrNameTaken, s.Name)
@@ -140,15 +140,20 @@ func scanSandbox(row scanner) (*sandbox.Sandbox, error) {
 		state                string
 		env, labels          string
 		createdAt, updatedAt string
+		parentSnapshotID     sql.NullString
 	)
 	err := row.Scan(&s.ID, &s.Name, &s.Image, &state, &s.Runtime, &s.RuntimeID,
 		&s.Resources.CPUMillis, &s.Resources.MemoryBytes, &s.Resources.PidsLimit,
-		&env, &labels, &createdAt, &updatedAt)
+		&env, &labels, &createdAt, &updatedAt, &parentSnapshotID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, sandbox.ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: scan sandbox: %w", err)
+	}
+	if parentSnapshotID.Valid {
+		id := parentSnapshotID.String
+		s.ParentSnapshotID = &id
 	}
 
 	s.State = sandbox.State(state)
