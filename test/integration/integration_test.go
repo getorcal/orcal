@@ -4,6 +4,7 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http/httptest"
@@ -140,6 +141,10 @@ func (e *env) runToCompletion(t *testing.T, ref string, command ...string) (stri
 		t.Fatalf("StreamOutput() error = %v", err)
 	}
 	return output.String(), exitCode
+}
+
+func asAPIError(err error, target **orcalclient.APIError) bool {
+	return errors.As(err, target)
 }
 
 func containerIDFor(t *testing.T, cli *client.Client, sandboxID string) string {
