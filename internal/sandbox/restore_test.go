@@ -3,13 +3,28 @@ package sandbox_test
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/getorcal/orcal/internal/runtime"
 	"github.com/getorcal/orcal/internal/runtime/fake"
 	"github.com/getorcal/orcal/internal/sandbox"
 	"github.com/getorcal/orcal/internal/snapshot"
+	"github.com/getorcal/orcal/internal/store/sqlite"
 )
+
+type hookRepo struct {
+	sandbox.Repo
+	onGet func(ctx context.Context, id string)
+}
+
+func (r *hookRepo) Get(ctx context.Context, id string) (*sandbox.Sandbox, error) {
+	if r.onGet != nil {
+		r.onGet(ctx, id)
+	}
+	return r.Repo.Get(ctx, id)
+}
 
 type stubSnapshots struct {
 	ref string
@@ -77,6 +92,54 @@ func TestForkPropagatesAnUnknownSnapshot(t *testing.T) {
 	_, err := svc.Fork(context.Background(), "ghost", sandbox.CreateOptions{})
 	if !errors.Is(err, snapshot.ErrNotFound) {
 		t.Errorf("Fork() error = %v, want snapshot.ErrNotFound", err)
+	}
+}
+
+func TestForkDoesNotClobberAConcurrentChangeToTheForkedSandbox(t *testing.T) {
+	st, err := sqlite.Open(filepath.Join(t.TempDir(), "orcal.db"))
+	if err != nil {
+		t.Fatalf("sqlite.Open() error = %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+
+	base := st.Sandboxes()
+	fired := false
+	repo := &hookRepo{Repo: base}
+	repo.onGet = func(ctx context.Context, id string) {
+		if fired {
+			return
+		}
+		fired = true
+		sb, err := base.Get(ctx, id)
+		if err != nil {
+			t.Fatalf("onGet: base.Get() error = %v", err)
+		}
+		sb.State = sandbox.StateDestroyed
+		sb.UpdatedAt = time.Now().UTC()
+		if err := base.Update(ctx, sb); err != nil {
+			t.Fatalf("onGet: base.Update() error = %v", err)
+		}
+	}
+
+	defaults := sandbox.Resources{CPUMillis: 1000, MemoryBytes: 1 << 30, PidsLimit: 512}
+	svc := sandbox.NewService(repo, fake.New(), defaults, "orcal")
+	svc.SetSnapshots(stubSnapshots{ref: "sha256:snap", id: "sn-1"})
+	ctx := context.Background()
+
+	forked, err := svc.Fork(ctx, "working-v1", sandbox.CreateOptions{Name: "experiment-a"})
+	if err != nil {
+		t.Fatalf("Fork() error = %v", err)
+	}
+
+	got, err := base.Get(ctx, forked.ID)
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if got.State != sandbox.StateDestroyed {
+		t.Errorf("State = %s, want destroyed - Fork must not clobber a concurrent change", got.State)
+	}
+	if got.ParentSnapshotID == nil || *got.ParentSnapshotID != "sn-1" {
+		t.Errorf("ParentSnapshotID = %v, want sn-1", got.ParentSnapshotID)
 	}
 }
 

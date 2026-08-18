@@ -301,12 +301,16 @@ func (s *Service) Fork(ctx context.Context, snapshotRef string, opts CreateOptio
 	unlock := s.locks.lock(created.ID)
 	defer unlock()
 
-	created.ParentSnapshotID = &snapshotID
-	created.UpdatedAt = s.now()
-	if err := s.repo.Update(ctx, created); err != nil {
+	fresh, err := s.repo.Get(ctx, created.ID)
+	if err != nil {
 		return nil, err
 	}
-	return created, nil
+	fresh.ParentSnapshotID = &snapshotID
+	fresh.UpdatedAt = s.now()
+	if err := s.repo.Update(ctx, fresh); err != nil {
+		return nil, err
+	}
+	return fresh, nil
 }
 
 func (s *Service) Restore(ctx context.Context, sandboxRef, snapshotRef string) (*Sandbox, error) {
