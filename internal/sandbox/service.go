@@ -379,3 +379,25 @@ func (s *Service) Restore(ctx context.Context, sandboxRef, snapshotRef string) (
 	}
 	return sb, nil
 }
+
+func (s *Service) UnpausePaused(ctx context.Context) (int, error) {
+	all, err := s.repo.List(ctx, Filter{States: []State{StateRunning}, Limit: 0})
+	if err != nil {
+		return 0, err
+	}
+
+	unpaused := 0
+	for _, sb := range all {
+		if sb.RuntimeID == "" {
+			continue
+		}
+		status, err := s.rt.Inspect(ctx, sb.RuntimeID)
+		if err != nil || status.State != runtime.ContainerPaused {
+			continue
+		}
+		if err := s.rt.Unpause(ctx, sb.RuntimeID); err == nil {
+			unpaused++
+		}
+	}
+	return unpaused, nil
+}

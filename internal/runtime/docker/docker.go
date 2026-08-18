@@ -107,14 +107,25 @@ func (d *Docker) Inspect(ctx context.Context, id string) (runtime.Status, error)
 		return runtime.Status{}, translate(err)
 	}
 	status := runtime.Status{State: runtime.ContainerStopped}
-	if info.State != nil && info.State.Running {
-		status.State = runtime.ContainerRunning
+	if info.State != nil {
+		status.State = containerStateFrom(info.State.Running, info.State.Paused)
 	}
 	if info.State != nil && !info.State.Running {
 		code := info.State.ExitCode
 		status.ExitCode = &code
 	}
 	return status, nil
+}
+
+func containerStateFrom(running, paused bool) runtime.ContainerState {
+	switch {
+	case running && paused:
+		return runtime.ContainerPaused
+	case running:
+		return runtime.ContainerRunning
+	default:
+		return runtime.ContainerStopped
+	}
 }
 
 func (d *Docker) Exec(ctx context.Context, id string, spec runtime.ExecSpec) (runtime.Session, error) {

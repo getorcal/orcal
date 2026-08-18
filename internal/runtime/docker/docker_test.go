@@ -29,3 +29,23 @@ func TestTranslateDoesNotLeakUnclassifiedDockerErrorType(t *testing.T) {
 		t.Errorf("translate(%v) = %v, opaqueDockerError type leaked via errors.As", original, got)
 	}
 }
+
+func TestTranslateMapsImageInUseToErrConflict(t *testing.T) {
+	err := translate(errdefs.Conflict(errors.New("image is being used by running container")))
+	if !errors.Is(err, runtime.ErrConflict) {
+		t.Errorf("translate() = %v, want ErrConflict", err)
+	}
+}
+
+func TestInspectReportsPausedDistinctly(t *testing.T) {
+	got := containerStateFrom(true, true)
+	if got != runtime.ContainerPaused {
+		t.Errorf("running+paused = %s, want paused", got)
+	}
+	if s := containerStateFrom(true, false); s != runtime.ContainerRunning {
+		t.Errorf("running = %s, want running", s)
+	}
+	if s := containerStateFrom(false, false); s != runtime.ContainerStopped {
+		t.Errorf("stopped = %s, want stopped", s)
+	}
+}

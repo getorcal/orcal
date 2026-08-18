@@ -235,3 +235,36 @@ func TestWithSnapshotSourceRefusesASandboxInError(t *testing.T) {
 		t.Errorf("WithSnapshotSource() on an errored sandbox = %v, want ErrInvalidState", err)
 	}
 }
+
+func TestUnpausePausedClearsAFrozenContainer(t *testing.T) {
+	svc, f := newService(t)
+	ctx := context.Background()
+	created, _ := svc.Create(ctx, sandbox.CreateOptions{Name: "my-agent", Image: "alpine:3.20"})
+
+	f.ForcePaused(created.RuntimeID)
+
+	n, err := svc.UnpausePaused(ctx)
+	if err != nil {
+		t.Fatalf("UnpausePaused() error = %v", err)
+	}
+	if n != 1 {
+		t.Errorf("unpaused = %d, want 1", n)
+	}
+	if st, _ := f.Inspect(ctx, created.RuntimeID); st.State != runtime.ContainerRunning {
+		t.Errorf("state = %s, want running", st.State)
+	}
+}
+
+func TestUnpausePausedIgnoresHealthySandboxes(t *testing.T) {
+	svc, _ := newService(t)
+	ctx := context.Background()
+	svc.Create(ctx, sandbox.CreateOptions{Name: "my-agent", Image: "alpine:3.20"})
+
+	n, err := svc.UnpausePaused(ctx)
+	if err != nil {
+		t.Fatalf("UnpausePaused() error = %v", err)
+	}
+	if n != 0 {
+		t.Errorf("unpaused = %d, want 0", n)
+	}
+}

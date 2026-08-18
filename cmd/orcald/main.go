@@ -91,6 +91,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	if n, err := sandboxes.UnpausePaused(ctx); err != nil {
+		logger.Warn("paused-container reconciliation incomplete", slog.String("error", err.Error()))
+	} else if n > 0 {
+		logger.Info("unpaused containers left frozen by a previous run", slog.Int("count", n))
+	}
 	if err := execs.Reconcile(ctx); err != nil {
 		logger.Warn("exec reconciliation incomplete", slog.String("error", err.Error()))
 	}
