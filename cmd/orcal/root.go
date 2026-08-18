@@ -62,6 +62,9 @@ func execute(args []string, stdout, stderr io.Writer) int {
 		a.lifecycleCmd("destroy", "Destroy a sandbox"),
 		a.execCmd(),
 		a.logsCmd(),
+		a.snapshotCmd(),
+		a.forkCmd(),
+		a.restoreCmd(),
 	)
 
 	root.SetArgs(args)

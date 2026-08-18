@@ -56,10 +56,11 @@ type errorEnvelope struct {
 }
 
 type ListParams struct {
-	Limit  int
-	Cursor string
-	Labels map[string]string
-	State  string
+	Limit   int
+	Cursor  string
+	Labels  map[string]string
+	State   string
+	Sandbox string
 }
 
 func (p ListParams) query() url.Values {
@@ -72,6 +73,9 @@ func (p ListParams) query() url.Values {
 	}
 	if p.State != "" {
 		q.Set("state", p.State)
+	}
+	if p.Sandbox != "" {
+		q.Set("sandbox", p.Sandbox)
 	}
 	for k, v := range p.Labels {
 		q.Add("label", k+"="+v)

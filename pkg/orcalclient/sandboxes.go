@@ -10,7 +10,8 @@ import (
 
 type CreateSandboxParams struct {
 	Name        string            `json:"name,omitempty"`
-	Image       string            `json:"image"`
+	Image       string            `json:"image,omitempty"`
+	Snapshot    string            `json:"snapshot,omitempty"`
 	CPUMillis   int               `json:"cpu_millis,omitempty"`
 	MemoryBytes int64             `json:"memory_bytes,omitempty"`
 	PidsLimit   int               `json:"pids_limit,omitempty"`
