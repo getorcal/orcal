@@ -21,7 +21,10 @@ func (s *Server) handleCreateSandbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	opts := sandbox.CreateOptions{Image: req.Image}
+	var opts sandbox.CreateOptions
+	if req.Image != nil {
+		opts.Image = *req.Image
+	}
 	if req.Name != nil {
 		opts.Name = *req.Name
 	}

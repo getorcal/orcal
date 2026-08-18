@@ -175,6 +175,95 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+  /sandboxes/{ref}/snapshots:
+    parameters:
+      - { name: ref, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listSandboxSnapshots
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
+        - { name: cursor, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: A page of snapshots
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SnapshotList" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createSnapshot
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateSnapshotRequest" }
+      responses:
+        "201":
+          description: Snapshot created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Snapshot" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /sandboxes/{ref}/restore:
+    parameters:
+      - { name: ref, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: restoreSandbox
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RestoreRequest" }
+      responses:
+        "200":
+          description: The restored sandbox
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sandbox" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /snapshots:
+    get:
+      operationId: listSnapshots
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: sandbox, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: A page of snapshots
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SnapshotList" }
+        "401": { $ref: "#/components/responses/Error" }
+  /snapshots/{ref}:
+    parameters:
+      - { name: ref, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getSnapshot
+      responses:
+        "200":
+          description: The snapshot
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Snapshot" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteSnapshot
+      responses:
+        "204":
+          description: Deleted
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
 components:
   securitySchemes:
     bearerAuth:
@@ -220,6 +309,7 @@ components:
         labels:
           type: object
           additionalProperties: { type: string }
+        parent_snapshot_id: { type: string, nullable: true }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
     SandboxList:
@@ -232,10 +322,11 @@ components:
         next_cursor: { type: string }
     CreateSandboxRequest:
       type: object
-      required: [image]
+      description: Exactly one of image or snapshot must be supplied
       properties:
         name: { type: string }
         image: { type: string }
+        snapshot: { type: string }
         cpu_millis: { type: integer, minimum: 1 }
         memory_bytes: { type: integer, format: int64, minimum: 1 }
         pids_limit: { type: integer, minimum: 1 }
@@ -287,6 +378,38 @@ components:
           type: array
           items: { $ref: "#/components/schemas/Exec" }
         next_cursor: { type: string }
+    Snapshot:
+      type: object
+      required: [id, sandbox_id, runtime_ref, image, size_bytes, created_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        sandbox_id: { type: string }
+        parent_id: { type: string, nullable: true }
+        runtime_ref: { type: string }
+        image: { type: string }
+        size_bytes:
+          type: integer
+          format: int64
+          description: Apparent image size including shared layers, not incremental disk use
+        created_at: { type: string, format: date-time }
+    SnapshotList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Snapshot" }
+        next_cursor: { type: string }
+    CreateSnapshotRequest:
+      type: object
+      properties:
+        name: { type: string }
+    RestoreRequest:
+      type: object
+      required: [snapshot]
+      properties:
+        snapshot: { type: string }
     Error:
       type: object
       required: [error]
@@ -302,6 +425,7 @@ components:
             - invalid_request
             - unauthorized
             - sandbox_not_found
+            - snapshot_not_found
             - exec_not_found
             - name_taken
             - invalid_state

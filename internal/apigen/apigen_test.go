@@ -19,12 +19,42 @@ func TestGeneratedTypesCoverTheContract(t *testing.T) {
 	}
 
 	var req CreateSandboxRequest
-	if req.Image != "" {
-		t.Errorf("zero CreateSandboxRequest.Image = %q, want empty", req.Image)
+	if req.Image != nil {
+		t.Error("zero CreateSandboxRequest.Image is non-nil, want nil")
 	}
 
 	var list SandboxList
 	if list.Items != nil {
 		t.Error("zero SandboxList.Items is non-nil, want nil")
+	}
+}
+
+func TestGeneratedSnapshotTypesCoverTheContract(t *testing.T) {
+	var s Snapshot
+	if s.Id != "" {
+		t.Errorf("zero Snapshot.Id = %q, want empty", s.Id)
+	}
+	if s.ParentId != nil {
+		t.Error("zero Snapshot.ParentId is non-nil, want nil")
+	}
+
+	var list SnapshotList
+	if list.Items != nil {
+		t.Error("zero SnapshotList.Items is non-nil, want nil")
+	}
+
+	var req RestoreRequest
+	if req.Snapshot != "" {
+		t.Errorf("zero RestoreRequest.Snapshot = %q, want empty", req.Snapshot)
+	}
+
+	var create CreateSandboxRequest
+	if create.Snapshot != nil {
+		t.Error("zero CreateSandboxRequest.Snapshot is non-nil, want nil")
+	}
+
+	var sb Sandbox
+	if sb.ParentSnapshotId != nil {
+		t.Error("zero Sandbox.ParentSnapshotId is non-nil, want nil")
 	}
 }

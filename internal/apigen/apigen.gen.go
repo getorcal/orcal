@@ -17,6 +17,7 @@ const (
 	ResourceExhausted  ErrorBodyCode = "resource_exhausted"
 	RuntimeUnavailable ErrorBodyCode = "runtime_unavailable"
 	SandboxNotFound    ErrorBodyCode = "sandbox_not_found"
+	SnapshotNotFound   ErrorBodyCode = "snapshot_not_found"
 	Unauthorized       ErrorBodyCode = "unauthorized"
 )
 
@@ -38,6 +39,8 @@ func (e ErrorBodyCode) Valid() bool {
 	case RuntimeUnavailable:
 		return true
 	case SandboxNotFound:
+		return true
+	case SnapshotNotFound:
 		return true
 	case Unauthorized:
 		return true
@@ -105,15 +108,21 @@ type CreateExecRequest struct {
 	WorkingDir *string            `json:"working_dir,omitempty"`
 }
 
-// CreateSandboxRequest defines model for CreateSandboxRequest.
+// CreateSandboxRequest Exactly one of image or snapshot must be supplied
 type CreateSandboxRequest struct {
 	CpuMillis   *int               `json:"cpu_millis,omitempty"`
 	Env         *map[string]string `json:"env,omitempty"`
-	Image       string             `json:"image"`
+	Image       *string            `json:"image,omitempty"`
 	Labels      *map[string]string `json:"labels,omitempty"`
 	MemoryBytes *int64             `json:"memory_bytes,omitempty"`
 	Name        *string            `json:"name,omitempty"`
 	PidsLimit   *int               `json:"pids_limit,omitempty"`
+	Snapshot    *string            `json:"snapshot,omitempty"`
+}
+
+// CreateSnapshotRequest defines model for CreateSnapshotRequest.
+type CreateSnapshotRequest struct {
+	Name *string `json:"name,omitempty"`
 }
 
 // Error defines model for Error.
@@ -163,18 +172,24 @@ type Resources struct {
 	PidsLimit   int   `json:"pids_limit"`
 }
 
+// RestoreRequest defines model for RestoreRequest.
+type RestoreRequest struct {
+	Snapshot string `json:"snapshot"`
+}
+
 // Sandbox defines model for Sandbox.
 type Sandbox struct {
-	CreatedAt time.Time          `json:"created_at"`
-	Env       *map[string]string `json:"env,omitempty"`
-	Id        string             `json:"id"`
-	Image     string             `json:"image"`
-	Labels    *map[string]string `json:"labels,omitempty"`
-	Name      *string            `json:"name,omitempty"`
-	Resources Resources          `json:"resources"`
-	Runtime   string             `json:"runtime"`
-	State     SandboxState       `json:"state"`
-	UpdatedAt time.Time          `json:"updated_at"`
+	CreatedAt        time.Time          `json:"created_at"`
+	Env              *map[string]string `json:"env,omitempty"`
+	Id               string             `json:"id"`
+	Image            string             `json:"image"`
+	Labels           *map[string]string `json:"labels,omitempty"`
+	Name             *string            `json:"name,omitempty"`
+	ParentSnapshotId *string            `json:"parent_snapshot_id,omitempty"`
+	Resources        Resources          `json:"resources"`
+	Runtime          string             `json:"runtime"`
+	State            SandboxState       `json:"state"`
+	UpdatedAt        time.Time          `json:"updated_at"`
 }
 
 // SandboxState defines model for Sandbox.State.
@@ -184,6 +199,26 @@ type SandboxState string
 type SandboxList struct {
 	Items      []Sandbox `json:"items"`
 	NextCursor *string   `json:"next_cursor,omitempty"`
+}
+
+// Snapshot defines model for Snapshot.
+type Snapshot struct {
+	CreatedAt  time.Time `json:"created_at"`
+	Id         string    `json:"id"`
+	Image      string    `json:"image"`
+	Name       *string   `json:"name,omitempty"`
+	ParentId   *string   `json:"parent_id,omitempty"`
+	RuntimeRef string    `json:"runtime_ref"`
+	SandboxId  string    `json:"sandbox_id"`
+
+	// SizeBytes Apparent image size including shared layers, not incremental disk use
+	SizeBytes int64 `json:"size_bytes"`
+}
+
+// SnapshotList defines model for SnapshotList.
+type SnapshotList struct {
+	Items      []Snapshot `json:"items"`
+	NextCursor *string    `json:"next_cursor,omitempty"`
 }
 
 // Version defines model for Version.
@@ -211,8 +246,27 @@ type ListExecsParams struct {
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
+// ListSandboxSnapshotsParams defines parameters for ListSandboxSnapshots.
+type ListSandboxSnapshotsParams struct {
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// ListSnapshotsParams defines parameters for ListSnapshots.
+type ListSnapshotsParams struct {
+	Limit   *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor  *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Sandbox *string `form:"sandbox,omitempty" json:"sandbox,omitempty"`
+}
+
 // CreateSandboxJSONRequestBody defines body for CreateSandbox for application/json ContentType.
 type CreateSandboxJSONRequestBody = CreateSandboxRequest
 
 // CreateExecJSONRequestBody defines body for CreateExec for application/json ContentType.
 type CreateExecJSONRequestBody = CreateExecRequest
+
+// RestoreSandboxJSONRequestBody defines body for RestoreSandbox for application/json ContentType.
+type RestoreSandboxJSONRequestBody = RestoreRequest
+
+// CreateSnapshotJSONRequestBody defines body for CreateSnapshot for application/json ContentType.
+type CreateSnapshotJSONRequestBody = CreateSnapshotRequest
