@@ -20,7 +20,7 @@ func (a *app) createCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create and start a sandbox",
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		RunE: a.runE(func(cmd *cobra.Command, _ []string) error {
 			params := orcalclient.CreateSandboxParams{
 				Name:        name,
 				Image:       image,
@@ -35,7 +35,7 @@ func (a *app) createCmd() *cobra.Command {
 				return err
 			}
 			return renderSandbox(a.stdout, a.settings.Output, created)
-		},
+		}),
 	}
 	cmd.Flags().StringVar(&name, "name", "", "sandbox name")
 	cmd.Flags().StringVar(&image, "image", "", "container image")
@@ -59,7 +59,7 @@ func (a *app) listCmd() *cobra.Command {
 		Use:     "list",
 		Aliases: []string{"ls"},
 		Short:   "List sandboxes",
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		RunE: a.runE(func(cmd *cobra.Command, _ []string) error {
 			list, err := a.client.ListSandboxes(cmd.Context(), orcalclient.ListParams{
 				Limit:  limit,
 				Cursor: cursor,
@@ -70,7 +70,7 @@ func (a *app) listCmd() *cobra.Command {
 				return err
 			}
 			return renderSandboxList(a.stdout, a.settings.Output, list)
-		},
+		}),
 	}
 	cmd.Flags().IntVar(&limit, "limit", 0, "maximum results")
 	cmd.Flags().StringVar(&cursor, "cursor", "", "pagination cursor")
@@ -84,13 +84,13 @@ func (a *app) inspectCmd() *cobra.Command {
 		Use:   "inspect <ref>",
 		Short: "Show a sandbox",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: a.runE(func(cmd *cobra.Command, args []string) error {
 			got, err := a.client.GetSandbox(cmd.Context(), args[0])
 			if err != nil {
 				return err
 			}
-			return renderJSON(a.stdout, got)
-		},
+			return renderSandboxInspect(a.stdout, a.settings.Output, got)
+		}),
 	}
 }
 
@@ -99,7 +99,7 @@ func (a *app) lifecycleCmd(verb, short string) *cobra.Command {
 		Use:   verb + " <ref>",
 		Short: short,
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: a.runE(func(cmd *cobra.Command, args []string) error {
 			var (
 				result any
 				err    error
@@ -120,7 +120,7 @@ func (a *app) lifecycleCmd(verb, short string) *cobra.Command {
 			}
 			_, writeErr := a.stdout.Write([]byte(args[0] + "\n"))
 			return writeErr
-		},
+		}),
 	}
 }
 

@@ -18,7 +18,7 @@ func (a *app) execCmd() *cobra.Command {
 		Use:   "exec <ref> -- <command>...",
 		Short: "Run a command in a sandbox",
 		Args:  cobra.MinimumNArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: a.runE(func(cmd *cobra.Command, args []string) error {
 			started, err := a.client.CreateExec(cmd.Context(), args[0], orcalclient.CreateExecParams{
 				Command:    args[1:],
 				Env:        parsePairs(envPairs),
@@ -32,7 +32,7 @@ func (a *app) execCmd() *cobra.Command {
 				return renderExec(a.stdout, a.settings.Output, started)
 			}
 			return a.streamAndExit(cmd, started.Id, 0)
-		},
+		}),
 	}
 	cmd.Flags().BoolVar(&detach, "detach", false, "return the exec id without streaming")
 	cmd.Flags().StringVar(&workingDir, "workdir", "", "working directory inside the sandbox")

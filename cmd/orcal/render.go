@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/getorcal/orcal/internal/apigen"
 	"github.com/getorcal/orcal/pkg/orcalclient"
@@ -80,6 +81,28 @@ func renderSandbox(w io.Writer, format string, s *apigen.Sandbox) error {
 	}
 	fmt.Fprintf(w, "%s\n", s.Id)
 	return nil
+}
+
+func renderSandboxInspect(w io.Writer, format string, s *apigen.Sandbox) error {
+	if format == "json" {
+		return renderJSON(w, s)
+	}
+	name := "-"
+	if s.Name != nil {
+		name = *s.Name
+	}
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(tw, "id:\t%s\n", s.Id)
+	fmt.Fprintf(tw, "name:\t%s\n", name)
+	fmt.Fprintf(tw, "image:\t%s\n", s.Image)
+	fmt.Fprintf(tw, "state:\t%s\n", s.State)
+	fmt.Fprintf(tw, "runtime:\t%s\n", s.Runtime)
+	fmt.Fprintf(tw, "cpu_millis:\t%d\n", s.Resources.CpuMillis)
+	fmt.Fprintf(tw, "memory_bytes:\t%d\n", s.Resources.MemoryBytes)
+	fmt.Fprintf(tw, "pids_limit:\t%d\n", s.Resources.PidsLimit)
+	fmt.Fprintf(tw, "created_at:\t%s\n", s.CreatedAt.Format(time.RFC3339))
+	fmt.Fprintf(tw, "updated_at:\t%s\n", s.UpdatedAt.Format(time.RFC3339))
+	return tw.Flush()
 }
 
 func renderSandboxList(w io.Writer, format string, list *apigen.SandboxList) error {

@@ -13,6 +13,14 @@ type app struct {
 	client   *orcalclient.Client
 	stdout   io.Writer
 	stderr   io.Writer
+	entered  bool
+}
+
+func (a *app) runE(fn func(cmd *cobra.Command, args []string) error) func(*cobra.Command, []string) error {
+	return func(cmd *cobra.Command, args []string) error {
+		a.entered = true
+		return fn(cmd, args)
+	}
 }
 
 func execute(args []string, stdout, stderr io.Writer) int {
@@ -62,6 +70,9 @@ func execute(args []string, stdout, stderr io.Writer) int {
 			return int(code)
 		}
 		printError(stderr, a.settings.Output == "json", err)
+		if !a.entered {
+			return exitUsage
+		}
 		return exitCode(err)
 	}
 	return exitOK

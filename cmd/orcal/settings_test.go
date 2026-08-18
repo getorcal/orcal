@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -49,5 +50,29 @@ func TestSettingsPrecedenceFlagBeatsEnvBeatsFileBeatsDefault(t *testing.T) {
 func TestResolveSettingsRejectsUnknownOutputFormat(t *testing.T) {
 	if _, err := resolveSettings("", "", "yaml", ""); err == nil {
 		t.Fatal("resolveSettings() error = nil, want an error for an unsupported format")
+	}
+}
+
+func TestResolveSettingsErrorsOnUnreadableExplicitConfigPath(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "does-not-exist.yaml")
+
+	_, err := resolveSettings("", "", "", missing)
+
+	if err == nil {
+		t.Fatal("resolveSettings() error = nil, want an error for an unreadable explicit config path")
+	}
+	if !strings.Contains(err.Error(), missing) {
+		t.Errorf("error = %v, want it to name the path %q", err, missing)
+	}
+}
+
+func TestResolveSettingsIgnoresAMissingDefaultConfigPath(t *testing.T) {
+	got, err := resolveSettings("", "", "", "")
+
+	if err != nil {
+		t.Fatalf("resolveSettings() error = %v, want a missing default config path to be ignored", err)
+	}
+	if got.URL != "http://127.0.0.1:8080" {
+		t.Errorf("URL = %q, want the default", got.URL)
 	}
 }

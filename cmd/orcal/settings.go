@@ -26,16 +26,23 @@ func defaultConfigPath() string {
 func resolveSettings(flagURL, flagToken, flagOutput, configPath string) (settings, error) {
 	s := settings{URL: defaultURL, Output: "human"}
 
-	if configPath == "" {
+	explicitConfig := configPath != ""
+	if !explicitConfig {
 		configPath = defaultConfigPath()
 	}
 	if configPath != "" {
-		fileURL, fileToken := readConfigFile(configPath)
-		if fileURL != "" {
-			s.URL = fileURL
-		}
-		if fileToken != "" {
-			s.Token = fileToken
+		fileURL, fileToken, err := readConfigFile(configPath)
+		if err != nil {
+			if explicitConfig {
+				return settings{}, fmt.Errorf("read config file %s: %w", configPath, err)
+			}
+		} else {
+			if fileURL != "" {
+				s.URL = fileURL
+			}
+			if fileToken != "" {
+				s.Token = fileToken
+			}
 		}
 	}
 
@@ -62,10 +69,10 @@ func resolveSettings(flagURL, flagToken, flagOutput, configPath string) (setting
 	return s, nil
 }
 
-func readConfigFile(path string) (string, string) {
+func readConfigFile(path string) (string, string, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return "", ""
+		return "", "", err
 	}
 	var url, token string
 	for _, line := range strings.Split(string(raw), "\n") {
@@ -81,5 +88,5 @@ func readConfigFile(path string) (string, string) {
 			token = value
 		}
 	}
-	return url, token
+	return url, token, nil
 }
