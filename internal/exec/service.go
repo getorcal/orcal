@@ -29,15 +29,17 @@ type CreateOptions struct {
 }
 
 type Service struct {
-	repo      Repo
-	sandboxes SandboxLookup
-	rt        runtime.Runtime
-	dir       string
-	maxBytes  int64
-	bcast     *Broadcaster
-	now       func() time.Time
-	newID     func() string
-	wg        sync.WaitGroup
+	repo         Repo
+	sandboxes    SandboxLookup
+	rt           runtime.Runtime
+	dir          string
+	maxBytes     int64
+	bcast        *Broadcaster
+	now          func() time.Time
+	newID        func() string
+	wg           sync.WaitGroup
+	shutdownCh   chan struct{}
+	shutdownOnce sync.Once
 }
 
 func NewService(repo Repo, sandboxes SandboxLookup, rt runtime.Runtime, dir string, maxBytes int64) (*Service, error) {
@@ -45,14 +47,15 @@ func NewService(repo Repo, sandboxes SandboxLookup, rt runtime.Runtime, dir stri
 		return nil, fmt.Errorf("exec: create log dir: %w", err)
 	}
 	return &Service{
-		repo:      repo,
-		sandboxes: sandboxes,
-		rt:        rt,
-		dir:       dir,
-		maxBytes:  maxBytes,
-		bcast:     NewBroadcaster(),
-		now:       func() time.Time { return time.Now().UTC() },
-		newID:     uuid.NewString,
+		repo:       repo,
+		sandboxes:  sandboxes,
+		rt:         rt,
+		dir:        dir,
+		maxBytes:   maxBytes,
+		bcast:      NewBroadcaster(),
+		now:        func() time.Time { return time.Now().UTC() },
+		newID:      uuid.NewString,
+		shutdownCh: make(chan struct{}),
 	}, nil
 }
 
@@ -61,6 +64,23 @@ func (s *Service) Broadcaster() *Broadcaster { return s.bcast }
 func (s *Service) LogPath(id string) string { return filepath.Join(s.dir, id+".log") }
 
 func (s *Service) Wait() { s.wg.Wait() }
+
+func (s *Service) Shutdown(ctx context.Context) error {
+	s.shutdownOnce.Do(func() { close(s.shutdownCh) })
+
+	done := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
 
 func (s *Service) Create(ctx context.Context, opts CreateOptions) (*Exec, error) {
 	if len(opts.Command) == 0 {
@@ -206,13 +226,13 @@ func (s *Service) Reconcile(ctx context.Context) error {
 
 	for _, e := range running {
 		if e.RuntimeExecID == "" {
-			s.finish(ctx, e.ID, nil, e.OutputBytes, e.Truncated, StateFailed)
+			s.reconcileHandleGone(ctx, e.ID, e.Truncated)
 			continue
 		}
 
 		status, err := s.rt.InspectExec(ctx, e.RuntimeExecID)
 		if err != nil {
-			s.finish(ctx, e.ID, nil, e.OutputBytes, e.Truncated, StateFailed)
+			s.reconcileHandleGone(ctx, e.ID, e.Truncated)
 			continue
 		}
 
@@ -228,6 +248,12 @@ func (s *Service) Reconcile(ctx context.Context) error {
 		go s.pollUntilExit(e.ID, e.RuntimeExecID, e.Truncated)
 	}
 	return nil
+}
+
+func (s *Service) reconcileHandleGone(ctx context.Context, execID string, truncated bool) {
+	s.appendGap(execID)
+	s.finish(ctx, execID, nil, s.logSize(execID), truncated, StateFailed)
+	s.bcast.Notify(execID)
 }
 
 func (s *Service) appendGap(execID string) {
@@ -255,17 +281,22 @@ func (s *Service) pollUntilExit(execID, runtimeExecID string, truncated bool) {
 	ticker := time.NewTicker(reconcilePollInterval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		status, err := s.rt.InspectExec(ctx, runtimeExecID)
-		if err != nil {
-			s.finish(ctx, execID, nil, s.logSize(execID), truncated, StateFailed)
-			s.bcast.Notify(execID)
+	for {
+		select {
+		case <-s.shutdownCh:
 			return
-		}
-		if !status.Running {
-			s.finish(ctx, execID, status.ExitCode, s.logSize(execID), truncated, StateExited)
-			s.bcast.Notify(execID)
-			return
+		case <-ticker.C:
+			status, err := s.rt.InspectExec(ctx, runtimeExecID)
+			if err != nil {
+				s.finish(ctx, execID, nil, s.logSize(execID), truncated, StateFailed)
+				s.bcast.Notify(execID)
+				return
+			}
+			if !status.Running {
+				s.finish(ctx, execID, status.ExitCode, s.logSize(execID), truncated, StateExited)
+				s.bcast.Notify(execID)
+				return
+			}
 		}
 	}
 }

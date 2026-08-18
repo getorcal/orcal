@@ -125,6 +125,8 @@ func run() error {
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		logger.Warn("graceful shutdown incomplete", slog.String("error", err.Error()))
 	}
-	execs.Wait()
+	if err := execs.Shutdown(shutdownCtx); err != nil {
+		logger.Warn("exec shutdown incomplete", slog.String("error", err.Error()))
+	}
 	return nil
 }
