@@ -8,11 +8,13 @@ import (
 	"github.com/getorcal/orcal/internal/auth"
 	"github.com/getorcal/orcal/internal/exec"
 	"github.com/getorcal/orcal/internal/sandbox"
+	"github.com/getorcal/orcal/internal/snapshot"
 )
 
 type Options struct {
 	Sandboxes *sandbox.Service
 	Execs     *exec.Service
+	Snapshots *snapshot.Service
 	TokenHash string
 	Version   string
 	Logger    *slog.Logger
@@ -21,6 +23,7 @@ type Options struct {
 type Server struct {
 	sandboxes *sandbox.Service
 	execs     *exec.Service
+	snapshots *snapshot.Service
 	version   string
 	logger    *slog.Logger
 	handler   http.Handler
@@ -30,6 +33,7 @@ func NewServer(opts Options) *Server {
 	s := &Server{
 		sandboxes: opts.Sandboxes,
 		execs:     opts.Execs,
+		snapshots: opts.Snapshots,
 		version:   opts.Version,
 		logger:    opts.Logger,
 	}
@@ -46,6 +50,7 @@ func NewServer(opts Options) *Server {
 	private.HandleFunc("POST /v1/sandboxes/{ref}/start", s.handleStartSandbox)
 	private.HandleFunc("POST /v1/sandboxes/{ref}/stop", s.handleStopSandbox)
 	s.registerExecRoutes(private)
+	s.registerSnapshotRoutes(private)
 
 	root := http.NewServeMux()
 	root.Handle("/v1/healthz", public)

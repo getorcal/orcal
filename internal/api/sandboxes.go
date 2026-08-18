@@ -21,10 +21,14 @@ func (s *Server) handleCreateSandbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var opts sandbox.CreateOptions
-	if req.Image != nil {
-		opts.Image = *req.Image
+	hasImage := req.Image != nil && *req.Image != ""
+	hasSnapshot := req.Snapshot != nil && *req.Snapshot != ""
+	if hasImage == hasSnapshot {
+		s.writeError(w, r, fmt.Errorf("%w: supply exactly one of image or snapshot", ErrInvalidRequest))
+		return
 	}
+
+	var opts sandbox.CreateOptions
 	if req.Name != nil {
 		opts.Name = *req.Name
 	}
@@ -44,7 +48,14 @@ func (s *Server) handleCreateSandbox(w http.ResponseWriter, r *http.Request) {
 		opts.Resources.PidsLimit = *req.PidsLimit
 	}
 
-	created, err := s.sandboxes.Create(r.Context(), opts)
+	var created *sandbox.Sandbox
+	var err error
+	if hasSnapshot {
+		created, err = s.sandboxes.Fork(r.Context(), *req.Snapshot, opts)
+	} else {
+		opts.Image = *req.Image
+		created, err = s.sandboxes.Create(r.Context(), opts)
+	}
 	if err != nil {
 		s.writeError(w, r, err)
 		return

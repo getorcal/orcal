@@ -4,6 +4,7 @@ import (
 	"github.com/getorcal/orcal/internal/apigen"
 	"github.com/getorcal/orcal/internal/exec"
 	"github.com/getorcal/orcal/internal/sandbox"
+	"github.com/getorcal/orcal/internal/snapshot"
 )
 
 func ptr[T any](v T) *T { return &v }
@@ -21,6 +22,7 @@ func toAPISandbox(s *sandbox.Sandbox) apigen.Sandbox {
 			MemoryBytes: s.Resources.MemoryBytes,
 			PidsLimit:   s.Resources.PidsLimit,
 		},
+		ParentSnapshotId: s.ParentSnapshotID,
 	}
 	if s.Name != "" {
 		out.Name = ptr(s.Name)
@@ -30,6 +32,22 @@ func toAPISandbox(s *sandbox.Sandbox) apigen.Sandbox {
 	}
 	if len(s.Labels) > 0 {
 		out.Labels = ptr(s.Labels)
+	}
+	return out
+}
+
+func toAPISnapshot(s *snapshot.Snapshot) apigen.Snapshot {
+	out := apigen.Snapshot{
+		Id:         s.ID,
+		SandboxId:  s.SandboxID,
+		ParentId:   s.ParentID,
+		RuntimeRef: s.RuntimeRef,
+		Image:      s.Image,
+		SizeBytes:  s.SizeBytes,
+		CreatedAt:  s.CreatedAt,
+	}
+	if s.Name != "" {
+		out.Name = ptr(s.Name)
 	}
 	return out
 }

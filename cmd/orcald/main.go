@@ -18,6 +18,7 @@ import (
 	"github.com/getorcal/orcal/internal/exec"
 	"github.com/getorcal/orcal/internal/runtime/docker"
 	"github.com/getorcal/orcal/internal/sandbox"
+	"github.com/getorcal/orcal/internal/snapshot"
 	"github.com/getorcal/orcal/internal/store/sqlite"
 )
 
@@ -93,12 +94,15 @@ func run() error {
 	if err := execs.Reconcile(ctx); err != nil {
 		logger.Warn("exec reconciliation incomplete", slog.String("error", err.Error()))
 	}
+	snapshots := snapshot.NewService(store.Snapshots(), sandboxes, rt)
+	sandboxes.SetSnapshots(snapshots)
 
 	server := &http.Server{
 		Addr: cfg.Addr,
 		Handler: api.NewServer(api.Options{
 			Sandboxes: sandboxes,
 			Execs:     execs,
+			Snapshots: snapshots,
 			TokenHash: tokenHash,
 			Version:   version,
 			Logger:    logger,

@@ -69,6 +69,18 @@ func TestResponsesMatchTheOpenAPIContract(t *testing.T) {
 
 	created := createSandbox(t, h, "my-agent")
 
+	snapResp, snapReq, snapBody := h.doCapturing(t, http.MethodPost, "/v1/sandboxes/my-agent/snapshots", map[string]any{"name": "v1"})
+	if snapResp.StatusCode != http.StatusCreated {
+		t.Fatalf("create snapshot status = %d, want 201", snapResp.StatusCode)
+	}
+	var createdSnapshot apigen.Snapshot
+	if err := json.Unmarshal(snapBody, &createdSnapshot); err != nil {
+		t.Fatalf("decode snapshot: %v", err)
+	}
+	t.Run(snapReq.Method+" "+snapReq.URL.Path, func(t *testing.T) {
+		assertMatchesContract(t, router, snapReq, snapResp, snapBody)
+	})
+
 	execResp, execReq, execBody := h.doCapturing(t, http.MethodPost, "/v1/sandboxes/my-agent/execs", map[string]any{
 		"command": []string{"true"},
 	})
@@ -100,6 +112,11 @@ func TestResponsesMatchTheOpenAPIContract(t *testing.T) {
 		{http.MethodGet, "/v1/execs/" + createdExec.Id + "/output?from=notanumber", nil},
 		{http.MethodPost, "/v1/sandboxes", map[string]any{"image": "alpine"}},
 		{http.MethodPost, "/v1/sandboxes", map[string]any{"name": "my-agent", "image": "alpine"}},
+		{http.MethodPost, "/v1/sandboxes", map[string]any{"name": "forked", "snapshot": "v1"}},
+		{http.MethodGet, "/v1/sandboxes/my-agent/snapshots", nil},
+		{http.MethodGet, "/v1/snapshots", nil},
+		{http.MethodGet, "/v1/snapshots/" + createdSnapshot.Id, nil},
+		{http.MethodPost, "/v1/sandboxes/my-agent/restore", map[string]any{"snapshot": "v1"}},
 		{http.MethodPost, "/v1/sandboxes/my-agent/start", nil},
 		{http.MethodPost, "/v1/sandboxes/my-agent/stop", nil},
 		{http.MethodDelete, "/v1/sandboxes/" + created.Id, nil},
@@ -111,4 +128,14 @@ func TestResponsesMatchTheOpenAPIContract(t *testing.T) {
 			assertMatchesContract(t, router, req, resp, body)
 		})
 	}
+
+	createSandbox(t, h, "throwaway")
+	toDelete := decode[apigen.Snapshot](t, h.do(t, http.MethodPost, "/v1/sandboxes/throwaway/snapshots", map[string]any{"name": "disposable"}))
+	t.Run("DELETE /v1/snapshots/{ref}", func(t *testing.T) {
+		resp := h.do(t, http.MethodDelete, "/v1/snapshots/"+toDelete.Id, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNoContent {
+			t.Errorf("status = %d, want 204", resp.StatusCode)
+		}
+	})
 }

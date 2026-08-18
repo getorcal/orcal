@@ -10,6 +10,7 @@ import (
 	"github.com/getorcal/orcal/internal/exec"
 	"github.com/getorcal/orcal/internal/runtime"
 	"github.com/getorcal/orcal/internal/sandbox"
+	"github.com/getorcal/orcal/internal/snapshot"
 )
 
 type ErrorCode = apigen.ErrorBodyCode
@@ -21,6 +22,7 @@ const (
 	CodeUnauthorized       ErrorCode = apigen.Unauthorized
 	CodeSandboxNotFound    ErrorCode = apigen.SandboxNotFound
 	CodeExecNotFound       ErrorCode = apigen.ExecNotFound
+	CodeSnapshotNotFound   ErrorCode = apigen.SnapshotNotFound
 	CodeNameTaken          ErrorCode = apigen.NameTaken
 	CodeInvalidState       ErrorCode = apigen.InvalidState
 	CodeResourceExhausted  ErrorCode = apigen.ResourceExhausted
@@ -30,6 +32,14 @@ const (
 
 func classify(err error) (int, ErrorCode) {
 	switch {
+	case errors.Is(err, snapshot.ErrNotFound):
+		return http.StatusNotFound, CodeSnapshotNotFound
+	case errors.Is(err, snapshot.ErrHasChildren), errors.Is(err, snapshot.ErrBackingImageMissing):
+		return http.StatusConflict, CodeInvalidState
+	case errors.Is(err, snapshot.ErrNameTaken):
+		return http.StatusConflict, CodeNameTaken
+	case errors.Is(err, snapshot.ErrInvalidName), errors.Is(err, snapshot.ErrNameLooksLikeID):
+		return http.StatusBadRequest, CodeInvalidRequest
 	case errors.Is(err, sandbox.ErrNotFound):
 		return http.StatusNotFound, CodeSandboxNotFound
 	case errors.Is(err, exec.ErrNotFound):
