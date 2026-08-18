@@ -11,4 +11,5 @@ var (
 	ErrNameLooksLikeID   = errors.New("sandbox: name must not be a UUID")
 	ErrInvalidResources  = errors.New("sandbox: invalid resource limits")
 	ErrResourceExhausted = errors.New("sandbox: resource limit exceeded")
+	ErrSnapshotRequired  = errors.New("sandbox: snapshot lookup not configured")
 )

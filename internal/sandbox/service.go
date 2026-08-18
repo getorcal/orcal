@@ -8,6 +8,7 @@ import (
 
 	"github.com/getorcal/orcal/internal/id"
 	"github.com/getorcal/orcal/internal/runtime"
+	"github.com/getorcal/orcal/internal/snapshot"
 	"github.com/google/uuid"
 )
 
@@ -21,14 +22,19 @@ type CreateOptions struct {
 	Resources Resources
 }
 
+type SnapshotLookup interface {
+	Resolve(ctx context.Context, ref string) (string, string, error)
+}
+
 type Service struct {
-	repo     Repo
-	rt       runtime.Runtime
-	defaults Resources
-	network  string
-	locks    *keyedMutex
-	now      func() time.Time
-	newID    func() string
+	repo      Repo
+	rt        runtime.Runtime
+	defaults  Resources
+	network   string
+	locks     *keyedMutex
+	now       func() time.Time
+	newID     func() string
+	snapshots SnapshotLookup
 }
 
 func NewService(repo Repo, rt runtime.Runtime, defaults Resources, network string) *Service {
@@ -42,6 +48,8 @@ func NewService(repo Repo, rt runtime.Runtime, defaults Resources, network strin
 		newID:    id.New,
 	}
 }
+
+func (s *Service) SetSnapshots(l SnapshotLookup) { s.snapshots = l }
 
 func (s *Service) Create(ctx context.Context, opts CreateOptions) (*Sandbox, error) {
 	if opts.Image == "" {
@@ -248,4 +256,122 @@ func (s *Service) RuntimeID(ctx context.Context, sandboxID string) (string, erro
 		return "", fmt.Errorf("%w: sandbox is %s", ErrInvalidState, sb.State)
 	}
 	return sb.RuntimeID, nil
+}
+
+func (s *Service) WithSnapshotSource(ctx context.Context, ref string, fn func(snapshot.SandboxSource) error) error {
+	sb, err := s.Get(ctx, ref)
+	if err != nil {
+		return err
+	}
+
+	unlock := s.locks.lock(sb.ID)
+	defer unlock()
+
+	sb, err = s.repo.Get(ctx, sb.ID)
+	if err != nil {
+		return err
+	}
+	if sb.State != StateRunning && sb.State != StateStopped {
+		return fmt.Errorf("%w: cannot snapshot a sandbox that is %s", ErrInvalidState, sb.State)
+	}
+
+	return fn(snapshot.SandboxSource{
+		ID:               sb.ID,
+		RuntimeID:        sb.RuntimeID,
+		Image:            sb.Image,
+		ParentSnapshotID: sb.ParentSnapshotID,
+	})
+}
+
+func (s *Service) Fork(ctx context.Context, snapshotRef string, opts CreateOptions) (*Sandbox, error) {
+	if s.snapshots == nil {
+		return nil, ErrSnapshotRequired
+	}
+	runtimeRef, snapshotID, err := s.snapshots.Resolve(ctx, snapshotRef)
+	if err != nil {
+		return nil, err
+	}
+
+	opts.Image = runtimeRef
+	created, err := s.Create(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	unlock := s.locks.lock(created.ID)
+	defer unlock()
+
+	created.ParentSnapshotID = &snapshotID
+	created.UpdatedAt = s.now()
+	if err := s.repo.Update(ctx, created); err != nil {
+		return nil, err
+	}
+	return created, nil
+}
+
+func (s *Service) Restore(ctx context.Context, sandboxRef, snapshotRef string) (*Sandbox, error) {
+	if s.snapshots == nil {
+		return nil, ErrSnapshotRequired
+	}
+	runtimeRef, snapshotID, err := s.snapshots.Resolve(ctx, snapshotRef)
+	if err != nil {
+		return nil, err
+	}
+
+	sb, err := s.Get(ctx, sandboxRef)
+	if err != nil {
+		return nil, err
+	}
+
+	unlock := s.locks.lock(sb.ID)
+	defer unlock()
+
+	sb, err = s.repo.Get(ctx, sb.ID)
+	if err != nil {
+		return nil, err
+	}
+	if sb.State != StateRunning && sb.State != StateStopped {
+		return nil, fmt.Errorf("%w: cannot restore a sandbox that is %s", ErrInvalidState, sb.State)
+	}
+
+	if sb.RuntimeID != "" {
+		if err := s.rt.Destroy(ctx, sb.RuntimeID); err != nil && !errors.Is(err, runtime.ErrNotFound) {
+			return nil, s.markError(ctx, sb, err)
+		}
+	}
+
+	runtimeID, err := s.rt.Create(ctx, runtime.CreateSpec{
+		SandboxID:   sb.ID,
+		Image:       runtimeRef,
+		Env:         sb.Env,
+		Labels:      sb.Labels,
+		CPUMillis:   sb.Resources.CPUMillis,
+		MemoryBytes: sb.Resources.MemoryBytes,
+		PidsLimit:   sb.Resources.PidsLimit,
+		NetworkName: s.network,
+	})
+	if err != nil {
+		return nil, s.markError(ctx, sb, err)
+	}
+
+	sb.RuntimeID = runtimeID
+	if err := s.rt.Start(ctx, runtimeID); err != nil {
+		return nil, s.markError(ctx, sb, err)
+	}
+
+	status, err := s.rt.Inspect(ctx, runtimeID)
+	if err != nil {
+		return nil, s.markError(ctx, sb, err)
+	}
+	if status.State != runtime.ContainerRunning {
+		return nil, s.markError(ctx, sb, fmt.Errorf("%w: container exited immediately after restore", ErrInvalidState))
+	}
+
+	sb.State = StateRunning
+	sb.ParentSnapshotID = &snapshotID
+	sb.UpdatedAt = s.now()
+	if err := s.repo.Update(ctx, sb); err != nil {
+		return nil, err
+	}
+	return sb, nil
 }

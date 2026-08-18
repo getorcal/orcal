@@ -1,0 +1,174 @@
+package sandbox_test
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/getorcal/orcal/internal/runtime"
+	"github.com/getorcal/orcal/internal/runtime/fake"
+	"github.com/getorcal/orcal/internal/sandbox"
+	"github.com/getorcal/orcal/internal/snapshot"
+)
+
+type stubSnapshots struct {
+	ref string
+	id  string
+	err error
+}
+
+func (s stubSnapshots) Resolve(ctx context.Context, ref string) (string, string, error) {
+	return s.ref, s.id, s.err
+}
+
+func TestForkCreatesANewSandboxFromTheSnapshotRef(t *testing.T) {
+	svc, f := newService(t)
+	svc.SetSnapshots(stubSnapshots{ref: "sha256:snap", id: "sn-1"})
+	ctx := context.Background()
+
+	forked, err := svc.Fork(ctx, "working-v1", sandbox.CreateOptions{Name: "experiment-a"})
+	if err != nil {
+		t.Fatalf("Fork() error = %v", err)
+	}
+	if forked.State != sandbox.StateRunning {
+		t.Errorf("State = %s, want running", forked.State)
+	}
+	if forked.ParentSnapshotID == nil || *forked.ParentSnapshotID != "sn-1" {
+		t.Errorf("ParentSnapshotID = %v, want sn-1", forked.ParentSnapshotID)
+	}
+	if spec := f.LastCreateSpec(); spec.Image != "sha256:snap" {
+		t.Errorf("spec.Image = %q, want the snapshot ref", spec.Image)
+	}
+}
+
+func TestForkAppliesResourceDefaultsRatherThanInheriting(t *testing.T) {
+	svc, f := newService(t)
+	svc.SetSnapshots(stubSnapshots{ref: "sha256:snap", id: "sn-1"})
+
+	forked, err := svc.Fork(context.Background(), "working-v1", sandbox.CreateOptions{Name: "experiment-a"})
+	if err != nil {
+		t.Fatalf("Fork() error = %v", err)
+	}
+	if forked.Resources.CPUMillis != 1000 || forked.Resources.PidsLimit != 512 {
+		t.Errorf("Resources = %+v, want the configured defaults", forked.Resources)
+	}
+	if spec := f.LastCreateSpec(); spec.CPUMillis != 1000 {
+		t.Errorf("spec.CPUMillis = %d, want 1000", spec.CPUMillis)
+	}
+}
+
+func TestForkHonoursExplicitResources(t *testing.T) {
+	svc, _ := newService(t)
+	svc.SetSnapshots(stubSnapshots{ref: "sha256:snap", id: "sn-1"})
+
+	forked, _ := svc.Fork(context.Background(), "working-v1", sandbox.CreateOptions{
+		Name:      "experiment-a",
+		Resources: sandbox.Resources{CPUMillis: 4000, MemoryBytes: 8 << 30, PidsLimit: 64},
+	})
+	if forked.Resources.CPUMillis != 4000 || forked.Resources.PidsLimit != 64 {
+		t.Errorf("Resources = %+v, want the explicit values", forked.Resources)
+	}
+}
+
+func TestForkPropagatesAnUnknownSnapshot(t *testing.T) {
+	svc, _ := newService(t)
+	svc.SetSnapshots(stubSnapshots{err: snapshot.ErrNotFound})
+
+	_, err := svc.Fork(context.Background(), "ghost", sandbox.CreateOptions{})
+	if !errors.Is(err, snapshot.ErrNotFound) {
+		t.Errorf("Fork() error = %v, want snapshot.ErrNotFound", err)
+	}
+}
+
+func TestRestoreReplacesTheContainerAndKeepsIdentity(t *testing.T) {
+	svc, f := newService(t)
+	svc.SetSnapshots(stubSnapshots{ref: "sha256:snap", id: "sn-1"})
+	ctx := context.Background()
+
+	original, _ := svc.Create(ctx, sandbox.CreateOptions{Name: "my-agent", Image: "alpine:3.20"})
+	oldRuntimeID := original.RuntimeID
+
+	restored, err := svc.Restore(ctx, "my-agent", "working-v1")
+	if err != nil {
+		t.Fatalf("Restore() error = %v", err)
+	}
+	if restored.ID != original.ID || restored.Name != "my-agent" {
+		t.Errorf("identity changed: %s/%s, want %s/my-agent", restored.ID, restored.Name, original.ID)
+	}
+	if restored.RuntimeID == oldRuntimeID {
+		t.Error("RuntimeID unchanged; the container was not replaced")
+	}
+	if restored.State != sandbox.StateRunning {
+		t.Errorf("State = %s, want running", restored.State)
+	}
+	if restored.ParentSnapshotID == nil || *restored.ParentSnapshotID != "sn-1" {
+		t.Errorf("ParentSnapshotID = %v, want sn-1", restored.ParentSnapshotID)
+	}
+	if st, _ := f.Inspect(ctx, oldRuntimeID); st.State != runtime.ContainerGone {
+		t.Errorf("old container state = %s, want gone", st.State)
+	}
+}
+
+func TestRestoreLeavesTheSandboxErroredWhenTheRuntimeFails(t *testing.T) {
+	svc, f := newService(t)
+	svc.SetSnapshots(stubSnapshots{ref: "sha256:snap", id: "sn-1"})
+	ctx := context.Background()
+	svc.Create(ctx, sandbox.CreateOptions{Name: "my-agent", Image: "alpine:3.20"})
+
+	f.SetCreateError(runtime.ErrUnavailable)
+	if _, err := svc.Restore(ctx, "my-agent", "working-v1"); err == nil {
+		t.Fatal("Restore() error = nil, want the runtime failure")
+	}
+
+	got, err := svc.Get(ctx, "my-agent")
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if got.State != sandbox.StateError {
+		t.Errorf("State = %s, want error", got.State)
+	}
+}
+
+func TestWithSnapshotSourceExposesLineageUnderTheLock(t *testing.T) {
+	svc, _ := newService(t)
+	ctx := context.Background()
+	created, _ := svc.Create(ctx, sandbox.CreateOptions{Name: "my-agent", Image: "alpine:3.20"})
+
+	var seen snapshot.SandboxSource
+	err := svc.WithSnapshotSource(ctx, "my-agent", func(src snapshot.SandboxSource) error {
+		seen = src
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("WithSnapshotSource() error = %v", err)
+	}
+	if seen.ID != created.ID || seen.RuntimeID != created.RuntimeID || seen.Image != "alpine:3.20" {
+		t.Errorf("source = %+v, want the created sandbox's identity", seen)
+	}
+	if seen.ParentSnapshotID != nil {
+		t.Errorf("ParentSnapshotID = %v, want nil", seen.ParentSnapshotID)
+	}
+}
+
+func TestWithSnapshotSourceRefusesADestroyedSandbox(t *testing.T) {
+	svc, _ := newService(t)
+	ctx := context.Background()
+	svc.Create(ctx, sandbox.CreateOptions{Name: "my-agent", Image: "alpine:3.20"})
+	svc.Destroy(ctx, "my-agent")
+
+	err := svc.WithSnapshotSource(ctx, "my-agent", func(snapshot.SandboxSource) error { return nil })
+	if !errors.Is(err, sandbox.ErrNotFound) {
+		t.Errorf("WithSnapshotSource() on a destroyed sandbox = %v, want ErrNotFound", err)
+	}
+}
+
+func TestWithSnapshotSourceRefusesASandboxInError(t *testing.T) {
+	svc := newServiceWithRuntime(t, &erroringRuntime{Fake: fake.New(), startErr: errors.New("start refused")})
+	ctx := context.Background()
+	svc.Create(ctx, sandbox.CreateOptions{Name: "my-agent", Image: "alpine:3.20"})
+
+	err := svc.WithSnapshotSource(ctx, "my-agent", func(snapshot.SandboxSource) error { return nil })
+	if !errors.Is(err, sandbox.ErrInvalidState) {
+		t.Errorf("WithSnapshotSource() on an errored sandbox = %v, want ErrInvalidState", err)
+	}
+}

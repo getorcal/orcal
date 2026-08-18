@@ -13,4 +13,4 @@ CREATE UNIQUE INDEX snapshots_live_name ON snapshots (name) WHERE name != '';
 CREATE INDEX snapshots_sandbox ON snapshots (sandbox_id, id);
 CREATE INDEX snapshots_parent ON snapshots (parent_id);
 
-ALTER TABLE sandboxes ADD COLUMN parent_snapshot_id TEXT REFERENCES snapshots (id);
+ALTER TABLE sandboxes ADD COLUMN parent_snapshot_id TEXT;
