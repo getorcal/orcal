@@ -74,10 +74,11 @@ func TestCapabilitiesAreActuallyDroppedInsideTheSandbox(t *testing.T) {
 	e := newEnv(t)
 	e.sandbox(t, "integration-caps")
 
-	_, code := e.runToCompletion(t, "integration-caps", "sh", "-c", "mount -t tmpfs none /mnt 2>/dev/null")
+	output, code := e.runToCompletion(t, "integration-caps", "sh", "-c",
+		"touch /tmp/orcal-chown-test && chown 1000:1000 /tmp/orcal-chown-test")
 
 	if code == 0 {
-		t.Error("mount succeeded inside the sandbox, want it to fail with capabilities dropped")
+		t.Errorf("chown succeeded inside the sandbox, want it to fail with CAP_CHOWN dropped; output = %q", output)
 	}
 }
 

@@ -214,20 +214,29 @@ func TestOutputStreamResumesFromOffsetAgainstRealDocker(t *testing.T) {
 	ctx := context.Background()
 
 	started, err := e.client.CreateExec(ctx, "integration-resume", orcalclient.CreateExecParams{
-		Command: []string{"sh", "-c", "echo first; echo second"},
+		Command: []string{"sh", "-c", "echo first; sleep 1; echo second"},
 	})
 	if err != nil {
 		t.Fatalf("CreateExec() error = %v", err)
 	}
 
-	var firstOffset int64
+	var (
+		firstOffset int64
+		frameCount  int
+	)
 	if err := e.client.StreamOutput(ctx, started.Id, 0, func(ev orcalclient.OutputEvent) error {
-		if ev.Event == "output" && firstOffset == 0 {
-			firstOffset = ev.Offset
+		if ev.Event == "output" {
+			frameCount++
+			if firstOffset == 0 {
+				firstOffset = ev.Offset
+			}
 		}
 		return nil
 	}); err != nil {
 		t.Fatalf("StreamOutput() error = %v", err)
+	}
+	if frameCount < 2 {
+		t.Fatalf("received %d output frames, want at least 2 so the resume spans a real reconnect", frameCount)
 	}
 	if firstOffset == 0 {
 		t.Fatal("no output frames received")
@@ -244,6 +253,9 @@ func TestOutputStreamResumesFromOffsetAgainstRealDocker(t *testing.T) {
 	}
 	if strings.Contains(resumed.String(), "first") {
 		t.Errorf("resumed output = %q, want it to start after the first frame", resumed.String())
+	}
+	if !strings.Contains(resumed.String(), "second") {
+		t.Errorf("resumed output = %q, want it to contain the second frame", resumed.String())
 	}
 }
 
