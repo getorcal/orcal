@@ -1,8 +1,8 @@
 .PHONY: build test test-docker lint generate verify-generate up down logs
 
 build:
-	go build -o dist/orcald ./cmd/orcald
-	go build -o dist/orcal ./cmd/orcal
+	go build -o bin/orcald ./cmd/orcald
+	go build -o bin/orcal ./cmd/orcal
 
 test:
 	go test ./...
