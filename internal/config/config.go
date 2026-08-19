@@ -16,6 +16,10 @@ type Config struct {
 	DefaultMemoryBytes int64
 	DefaultPidsLimit   int
 	NetworkName        string
+	FileMaxBytes       int64
+	ArchiveMaxBytes    int64
+	ListMaxEntries     int
+	ListMaxScanBytes   int64
 }
 
 func Load() (Config, error) {
@@ -44,6 +48,20 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	c.DefaultPidsLimit = int(pids)
+	if c.FileMaxBytes, err = envPositiveInt64("ORCAL_FILE_MAX_BYTES", 64<<20); err != nil {
+		return Config{}, err
+	}
+	if c.ArchiveMaxBytes, err = envPositiveInt64("ORCAL_ARCHIVE_MAX_BYTES", 1<<30); err != nil {
+		return Config{}, err
+	}
+	listEntries, err := envPositiveInt64("ORCAL_LIST_MAX_ENTRIES", 10000)
+	if err != nil {
+		return Config{}, err
+	}
+	c.ListMaxEntries = int(listEntries)
+	if c.ListMaxScanBytes, err = envPositiveInt64("ORCAL_LIST_MAX_SCAN_BYTES", 256<<20); err != nil {
+		return Config{}, err
+	}
 
 	return c, nil
 }
