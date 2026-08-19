@@ -69,6 +69,7 @@ func execute(args []string, stdout, stderr io.Writer) int {
 		a.restoreCmd(),
 		a.cpCmd(),
 		a.fileCmd(),
+		a.tokenCmd(),
 	)
 
 	root.SetArgs(args)

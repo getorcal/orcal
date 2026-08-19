@@ -160,3 +160,56 @@ func renderExec(w io.Writer, format string, e *apigen.Exec) error {
 	fmt.Fprintf(w, "%s\n", e.Id)
 	return nil
 }
+
+func renderCreatedToken(stdout, stderr io.Writer, format string, t *apigen.CreatedToken) error {
+	if format == "json" {
+		return renderJSON(stdout, t)
+	}
+	if _, err := fmt.Fprintln(stdout, t.Token); err != nil {
+		return err
+	}
+	tw := tabwriter.NewWriter(stderr, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(tw, "id:\t%s\n", t.Id)
+	fmt.Fprintf(tw, "name:\t%s\n", t.Name)
+	fmt.Fprintf(tw, "prefix:\t%s\n", t.Prefix)
+	fmt.Fprintf(tw, "scopes:\t%s\n", joinScopes(t.Scopes))
+	fmt.Fprintf(tw, "expires_at:\t%s\n", formatOptionalTime(t.ExpiresAt))
+	return tw.Flush()
+}
+
+func renderTokenList(w io.Writer, format string, list *apigen.TokenList) error {
+	if format == "json" {
+		return renderJSON(w, list)
+	}
+	tw := tabwriter.NewWriter(w, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(tw, "ID\tNAME\tPREFIX\tSCOPES\tEXPIRES\tLAST USED")
+	for _, item := range list.Items {
+		prefix := item.Prefix
+		if prefix == "" {
+			prefix = "(unknown)"
+		}
+		name := item.Name
+		if item.RevokedAt != nil {
+			name += " (revoked)"
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
+			item.Id, name, prefix, joinScopes(item.Scopes),
+			formatOptionalTime(item.ExpiresAt), formatOptionalTime(item.LastUsedAt))
+	}
+	return tw.Flush()
+}
+
+func joinScopes(scopes []apigen.Scope) string {
+	parts := make([]string, 0, len(scopes))
+	for _, scope := range scopes {
+		parts = append(parts, string(scope))
+	}
+	return strings.Join(parts, ",")
+}
+
+func formatOptionalTime(t *time.Time) string {
+	if t == nil {
+		return "-"
+	}
+	return t.Format(time.RFC3339)
+}
