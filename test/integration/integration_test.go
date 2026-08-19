@@ -16,8 +16,10 @@ import (
 	"testing"
 	"time"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 
 	"github.com/getorcal/orcal/internal/api"
@@ -57,6 +59,7 @@ type env struct {
 	docker    *docker.Docker
 	sandboxes []string
 	snapshots []string
+	images    []string
 }
 
 func newEnv(t *testing.T) *env {
@@ -125,6 +128,20 @@ func newEnv(t *testing.T) *env {
 				t.Errorf("cleanup: DeleteSnapshot(%s) error = %v", id, err)
 			}
 		}
+		if len(e.images) == 0 {
+			return
+		}
+		cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+		if err != nil {
+			t.Errorf("cleanup: docker client: %v", err)
+			return
+		}
+		defer cli.Close()
+		for _, ref := range e.images {
+			if _, err := cli.ImageRemove(teardownCtx, ref, image.RemoveOptions{}); err != nil && !cerrdefs.IsNotFound(err) {
+				t.Errorf("cleanup: ImageRemove(%s) error = %v", ref, err)
+			}
+		}
 	})
 	return e
 }
@@ -153,6 +170,18 @@ func (e *env) sandbox(t *testing.T, name string) string {
 		t.Fatalf("CreateSandbox() error = %v", err)
 	}
 	e.sandboxes = append(e.sandboxes, created.Id)
+	return created.Id
+}
+
+func (e *env) sandboxWithImage(t *testing.T, name, img string) string {
+	t.Helper()
+	ctx := context.Background()
+	created, err := e.client.CreateSandbox(ctx, orcalclient.CreateSandboxParams{Name: name, Image: img})
+	if err != nil {
+		t.Fatalf("CreateSandbox() error = %v", err)
+	}
+	e.sandboxes = append(e.sandboxes, created.Id)
+	e.images = append(e.images, img)
 	return created.Id
 }
 
