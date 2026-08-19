@@ -1,6 +1,6 @@
 module github.com/getorcal/orcal
 
-go 1.23.0
+go 1.25.0
 
 require (
 	github.com/docker/docker v28.5.2+incompatible

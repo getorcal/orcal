@@ -29,20 +29,37 @@ func TestOnlyTheDockerAdapterImportsDocker(t *testing.T) {
 	}
 }
 
-func TestGoDirectiveIsPinnedToTheDependencyFloor(t *testing.T) {
-	data, err := os.ReadFile("../go.mod")
+// The go directive is the minimum toolchain consumers need, and Go gates new runtime behaviour
+// on it — container-aware GOMAXPROCS is why this project is on 1.25 rather than the 1.23.0 its
+// dependencies would allow. A build image older than the directive compiles fine and silently
+// drops that behaviour, so the two are asserted together.
+func TestGoDirectiveMatchesTheBuildImage(t *testing.T) {
+	mod, err := os.ReadFile("../go.mod")
 	if err != nil {
 		t.Fatalf("read go.mod: %v", err)
 	}
 
-	const want = "go 1.23.0"
-	for _, line := range strings.Split(string(data), "\n") {
+	const want = "go 1.25.0"
+	directive := ""
+	for _, line := range strings.Split(string(mod), "\n") {
 		if strings.HasPrefix(line, "go ") {
-			if line != want {
-				t.Errorf("go.mod directive = %q, want %q; this floor is held down by modernc.org/sqlite v1.39.0, github.com/getkin/kin-openapi v0.135.0, the oapi-codegen generate directive, and the golang:1.23-alpine build image — raising it means re-validating all four together, not just bumping this line", line, want)
-			}
-			return
+			directive = line
+			break
 		}
 	}
-	t.Fatal("go.mod has no go directive line")
+	if directive == "" {
+		t.Fatal("go.mod has no go directive line")
+	}
+	if directive != want {
+		t.Errorf("go.mod directive = %q, want %q; move it deliberately and never let `go mod tidy` move it for you", directive, want)
+	}
+
+	series := strings.TrimPrefix(strings.TrimSuffix(want, ".0"), "go ")
+	dockerfile, err := os.ReadFile("../deploy/Dockerfile")
+	if err != nil {
+		t.Fatalf("read Dockerfile: %v", err)
+	}
+	if !strings.Contains(string(dockerfile), "FROM golang:"+series+"-alpine") {
+		t.Errorf("deploy/Dockerfile does not build on golang:%s-alpine, so the shipped binary would not get the behaviour the go directive enables", series)
+	}
 }
