@@ -114,9 +114,29 @@ func run() error {
 		ListMaxScanBytes: cfg.ListMaxScanBytes,
 	})
 	events := audit.NewService(store.Events(), audit.RetentionPolicy{
-		MaxAge:    90 * 24 * time.Hour,
-		MaxEvents: 1000000,
+		MaxAge:    time.Duration(cfg.AuditRetentionDays) * 24 * time.Hour,
+		MaxEvents: cfg.AuditMaxEvents,
 	})
+
+	go func() {
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				removed, err := events.Prune(context.WithoutCancel(ctx))
+				if err != nil {
+					logger.Warn("audit prune incomplete", slog.String("error", err.Error()))
+					continue
+				}
+				if removed > 0 {
+					logger.Info("pruned audit events", slog.Int64("count", removed))
+				}
+			}
+		}
+	}()
 
 	server := &http.Server{
 		Addr: cfg.Addr,

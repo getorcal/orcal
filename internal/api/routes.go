@@ -51,5 +51,7 @@ func (s *Server) routes() []route {
 		{Method: "POST", Path: "/v1/tokens", Scope: auth.ScopeAdmin, Action: audit.ActionTokenCreate, Audited: true, Handler: s.handleCreateToken},
 		{Method: "GET", Path: "/v1/tokens", Scope: auth.ScopeAdmin, Handler: s.handleListTokens},
 		{Method: "DELETE", Path: "/v1/tokens/{id}", Scope: auth.ScopeAdmin, Action: audit.ActionTokenRevoke, Audited: true, Handler: s.handleRevokeToken},
+
+		{Method: "GET", Path: "/v1/events", Scope: auth.ScopeAuditRead, Handler: s.handleListEvents},
 	}
 }

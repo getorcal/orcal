@@ -234,6 +234,27 @@ type ErrorBody struct {
 // ErrorBodyCode defines model for ErrorBody.Code.
 type ErrorBodyCode string
 
+// Event defines model for Event.
+type Event struct {
+	Action       string                  `json:"action"`
+	ActorName    *string                 `json:"actor_name,omitempty"`
+	ActorTokenId *string                 `json:"actor_token_id,omitempty"`
+	Details      *map[string]interface{} `json:"details,omitempty"`
+	Id           string                  `json:"id"`
+	RemoteAddr   *string                 `json:"remote_addr,omitempty"`
+	RequestId    string                  `json:"request_id"`
+	ResourceId   *string                 `json:"resource_id,omitempty"`
+	ResourceType *string                 `json:"resource_type,omitempty"`
+	Status       int                     `json:"status"`
+	Ts           time.Time               `json:"ts"`
+}
+
+// EventList defines model for EventList.
+type EventList struct {
+	Items      []Event `json:"items"`
+	NextCursor *string `json:"next_cursor,omitempty"`
+}
+
 // Exec defines model for Exec.
 type Exec struct {
 	Command     []string           `json:"command"`
@@ -368,6 +389,18 @@ type TokenList struct {
 type Version struct {
 	ApiVersions []string `json:"api_versions"`
 	Version     string   `json:"version"`
+}
+
+// ListEventsParams defines parameters for ListEvents.
+type ListEventsParams struct {
+	Actor        *string    `form:"actor,omitempty" json:"actor,omitempty"`
+	Action       *string    `form:"action,omitempty" json:"action,omitempty"`
+	ResourceType *string    `form:"resource_type,omitempty" json:"resource_type,omitempty"`
+	ResourceId   *string    `form:"resource_id,omitempty" json:"resource_id,omitempty"`
+	Since        *time.Time `form:"since,omitempty" json:"since,omitempty"`
+	Until        *time.Time `form:"until,omitempty" json:"until,omitempty"`
+	Limit        *int       `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor       *string    `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
 // GetExecOutputParams defines parameters for GetExecOutput.

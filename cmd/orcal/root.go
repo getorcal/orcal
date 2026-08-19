@@ -70,6 +70,7 @@ func execute(args []string, stdout, stderr io.Writer) int {
 		a.cpCmd(),
 		a.fileCmd(),
 		a.tokenCmd(),
+		a.eventsCmd(),
 	)
 
 	root.SetArgs(args)

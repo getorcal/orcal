@@ -20,6 +20,8 @@ type Config struct {
 	ArchiveMaxBytes    int64
 	ListMaxEntries     int
 	ListMaxScanBytes   int64
+	AuditRetentionDays int
+	AuditMaxEvents     int
 }
 
 func Load() (Config, error) {
@@ -62,6 +64,16 @@ func Load() (Config, error) {
 	if c.ListMaxScanBytes, err = envPositiveInt64("ORCAL_LIST_MAX_SCAN_BYTES", 256<<20); err != nil {
 		return Config{}, err
 	}
+	retentionDays, err := envPositiveInt64("ORCAL_AUDIT_RETENTION_DAYS", 90)
+	if err != nil {
+		return Config{}, err
+	}
+	c.AuditRetentionDays = int(retentionDays)
+	maxEvents, err := envPositiveInt64("ORCAL_AUDIT_MAX_EVENTS", 1000000)
+	if err != nil {
+		return Config{}, err
+	}
+	c.AuditMaxEvents = int(maxEvents)
 
 	return c, nil
 }

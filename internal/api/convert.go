@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/getorcal/orcal/internal/apigen"
+	"github.com/getorcal/orcal/internal/audit"
 	"github.com/getorcal/orcal/internal/auth"
 	"github.com/getorcal/orcal/internal/exec"
 	"github.com/getorcal/orcal/internal/runtime"
@@ -93,6 +94,35 @@ func toAPIToken(t *auth.Token) apigen.Token {
 		LastUsedAt: t.LastUsedAt,
 		RevokedAt:  t.RevokedAt,
 	}
+}
+
+func toAPIEvent(e *audit.Event) apigen.Event {
+	out := apigen.Event{
+		Id:        e.ID,
+		Ts:        e.Timestamp,
+		Action:    string(e.Action),
+		Status:    e.Status,
+		RequestId: e.RequestID,
+	}
+	if e.ActorTokenID != "" {
+		out.ActorTokenId = ptr(e.ActorTokenID)
+	}
+	if e.ActorName != "" {
+		out.ActorName = ptr(e.ActorName)
+	}
+	if e.ResourceType != "" {
+		out.ResourceType = ptr(e.ResourceType)
+	}
+	if e.ResourceID != "" {
+		out.ResourceId = ptr(e.ResourceID)
+	}
+	if e.RemoteAddr != "" {
+		out.RemoteAddr = ptr(e.RemoteAddr)
+	}
+	if len(e.Details) > 0 {
+		out.Details = ptr(e.Details)
+	}
+	return out
 }
 
 func toAPIExec(e *exec.Exec) apigen.Exec {

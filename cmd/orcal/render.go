@@ -200,6 +200,27 @@ func renderTokenList(w io.Writer, format string, list *apigen.TokenList) error {
 	return tw.Flush()
 }
 
+func renderEventList(w io.Writer, format string, list *apigen.EventList) error {
+	if format == "json" {
+		return renderJSON(w, list)
+	}
+	tw := tabwriter.NewWriter(w, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(tw, "TIME\tACTOR\tACTION\tRESOURCE\tSTATUS")
+	for _, item := range list.Items {
+		actor := "-"
+		if item.ActorName != nil && *item.ActorName != "" {
+			actor = *item.ActorName
+		}
+		resource := "-"
+		if item.ResourceId != nil && *item.ResourceId != "" {
+			resource = *item.ResourceId
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%d\n",
+			item.Ts.Format(time.RFC3339), actor, item.Action, resource, item.Status)
+	}
+	return tw.Flush()
+}
+
 func joinScopes(scopes []apigen.Scope) string {
 	parts := make([]string, 0, len(scopes))
 	for _, scope := range scopes {
