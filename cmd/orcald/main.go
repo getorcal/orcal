@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/getorcal/orcal/internal/api"
+	"github.com/getorcal/orcal/internal/audit"
 	"github.com/getorcal/orcal/internal/auth"
 	"github.com/getorcal/orcal/internal/config"
 	"github.com/getorcal/orcal/internal/exec"
@@ -112,6 +113,10 @@ func run() error {
 		ListMaxEntries:   cfg.ListMaxEntries,
 		ListMaxScanBytes: cfg.ListMaxScanBytes,
 	})
+	events := audit.NewService(store.Events(), audit.RetentionPolicy{
+		MaxAge:    90 * 24 * time.Hour,
+		MaxEvents: 1000000,
+	})
 
 	server := &http.Server{
 		Addr: cfg.Addr,
@@ -121,6 +126,7 @@ func run() error {
 			Snapshots: snapshots,
 			Files:     fileSvc,
 			Tokens:    tokens,
+			Audit:     events,
 			Version:   version,
 			Logger:    logger,
 		}),
