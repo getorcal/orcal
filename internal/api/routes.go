@@ -46,5 +46,9 @@ func (s *Server) routes() []route {
 		{Method: "GET", Path: "/v1/sandboxes/{ref}/files/list", Scope: auth.ScopeFilesRead, Handler: s.handleListFiles},
 		{Method: "GET", Path: "/v1/sandboxes/{ref}/archive", Scope: auth.ScopeFilesRead, Action: "archive.download", Audited: true, Handler: s.handleDownloadArchive},
 		{Method: "PUT", Path: "/v1/sandboxes/{ref}/archive", Scope: auth.ScopeFilesWrite, Action: "archive.upload", Audited: true, Handler: s.handleUploadArchive},
+
+		{Method: "POST", Path: "/v1/tokens", Scope: auth.ScopeAdmin, Action: "token.create", Audited: true, Handler: s.handleCreateToken},
+		{Method: "GET", Path: "/v1/tokens", Scope: auth.ScopeAdmin, Handler: s.handleListTokens},
+		{Method: "DELETE", Path: "/v1/tokens/{id}", Scope: auth.ScopeAdmin, Action: "token.revoke", Audited: true, Handler: s.handleRevokeToken},
 	}
 }

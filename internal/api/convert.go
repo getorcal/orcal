@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/getorcal/orcal/internal/apigen"
+	"github.com/getorcal/orcal/internal/auth"
 	"github.com/getorcal/orcal/internal/exec"
 	"github.com/getorcal/orcal/internal/runtime"
 	"github.com/getorcal/orcal/internal/sandbox"
@@ -67,6 +68,27 @@ func toAPIFileInfo(info runtime.FileInfo) apigen.FileInfo {
 		out.LinkTarget = ptr(info.LinkTarget)
 	}
 	return out
+}
+
+func apiScopes(scopes auth.Scopes) []apigen.Scope {
+	out := make([]apigen.Scope, 0, len(scopes))
+	for _, scope := range scopes {
+		out = append(out, apigen.Scope(scope))
+	}
+	return out
+}
+
+func toAPIToken(t *auth.Token) apigen.Token {
+	return apigen.Token{
+		Id:         t.ID,
+		Name:       t.Name,
+		Prefix:     t.Prefix,
+		Scopes:     apiScopes(t.Scopes),
+		CreatedAt:  t.CreatedAt,
+		ExpiresAt:  t.ExpiresAt,
+		LastUsedAt: t.LastUsedAt,
+		RevokedAt:  t.RevokedAt,
+	}
 }
 
 func toAPIExec(e *exec.Exec) apigen.Exec {

@@ -109,6 +109,48 @@ func (e SandboxState) Valid() bool {
 	}
 }
 
+// Defines values for Scope.
+const (
+	ScopeAdmin          Scope = "admin"
+	ScopeAsterisk       Scope = "*"
+	ScopeAuditRead      Scope = "audit:read"
+	ScopeExec           Scope = "exec"
+	ScopeFilesRead      Scope = "files:read"
+	ScopeFilesWrite     Scope = "files:write"
+	ScopeSandboxesRead  Scope = "sandboxes:read"
+	ScopeSandboxesWrite Scope = "sandboxes:write"
+	ScopeSnapshotsRead  Scope = "snapshots:read"
+	ScopeSnapshotsWrite Scope = "snapshots:write"
+)
+
+// Valid indicates whether the value is a known member of the Scope enum.
+func (e Scope) Valid() bool {
+	switch e {
+	case ScopeAdmin:
+		return true
+	case ScopeAsterisk:
+		return true
+	case ScopeAuditRead:
+		return true
+	case ScopeExec:
+		return true
+	case ScopeFilesRead:
+		return true
+	case ScopeFilesWrite:
+		return true
+	case ScopeSandboxesRead:
+		return true
+	case ScopeSandboxesWrite:
+		return true
+	case ScopeSnapshotsRead:
+		return true
+	case ScopeSnapshotsWrite:
+		return true
+	default:
+		return false
+	}
+}
+
 // CreateExecRequest defines model for CreateExecRequest.
 type CreateExecRequest struct {
 	Command    []string           `json:"command"`
@@ -132,6 +174,28 @@ type CreateSandboxRequest struct {
 // CreateSnapshotRequest defines model for CreateSnapshotRequest.
 type CreateSnapshotRequest struct {
 	Name *string `json:"name,omitempty"`
+}
+
+// CreateTokenRequest defines model for CreateTokenRequest.
+type CreateTokenRequest struct {
+	ExpiresInSeconds *int64  `json:"expires_in_seconds,omitempty"`
+	Name             string  `json:"name"`
+	Scopes           []Scope `json:"scopes"`
+}
+
+// CreatedToken defines model for CreatedToken.
+type CreatedToken struct {
+	CreatedAt  time.Time  `json:"created_at"`
+	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
+	Id         string     `json:"id"`
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+	Name       string     `json:"name"`
+	Prefix     string     `json:"prefix"`
+	RevokedAt  *time.Time `json:"revoked_at,omitempty"`
+	Scopes     []Scope    `json:"scopes"`
+
+	// Token The plaintext, returned only here and never again
+	Token string `json:"token"`
 }
 
 // Error defines model for Error.
@@ -230,6 +294,9 @@ type SandboxList struct {
 	NextCursor *string   `json:"next_cursor,omitempty"`
 }
 
+// Scope defines model for Scope.
+type Scope string
+
 // Snapshot defines model for Snapshot.
 type Snapshot struct {
 	CreatedAt  time.Time `json:"created_at"`
@@ -248,6 +315,23 @@ type Snapshot struct {
 type SnapshotList struct {
 	Items      []Snapshot `json:"items"`
 	NextCursor *string    `json:"next_cursor,omitempty"`
+}
+
+// Token defines model for Token.
+type Token struct {
+	CreatedAt  time.Time  `json:"created_at"`
+	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
+	Id         string     `json:"id"`
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+	Name       string     `json:"name"`
+	Prefix     string     `json:"prefix"`
+	RevokedAt  *time.Time `json:"revoked_at,omitempty"`
+	Scopes     []Scope    `json:"scopes"`
+}
+
+// TokenList defines model for TokenList.
+type TokenList struct {
+	Items []Token `json:"items"`
 }
 
 // Version defines model for Version.
@@ -329,3 +413,6 @@ type RestoreSandboxJSONRequestBody = RestoreRequest
 
 // CreateSnapshotJSONRequestBody defines body for CreateSnapshot for application/json ContentType.
 type CreateSnapshotJSONRequestBody = CreateSnapshotRequest
+
+// CreateTokenJSONRequestBody defines body for CreateToken for application/json ContentType.
+type CreateTokenJSONRequestBody = CreateTokenRequest
