@@ -8,8 +8,9 @@ import (
 )
 
 type memRepo struct {
-	tokens  []*Token
-	touched int
+	tokens       []*Token
+	touched      int
+	getByHashErr error
 }
 
 func (m *memRepo) Create(_ context.Context, t *Token) error {
@@ -34,6 +35,9 @@ func (m *memRepo) Get(_ context.Context, id string) (*Token, error) {
 }
 
 func (m *memRepo) GetByHash(_ context.Context, hash string) (*Token, error) {
+	if m.getByHashErr != nil {
+		return nil, m.getByHashErr
+	}
 	for _, t := range m.tokens {
 		if t.Hash == hash {
 			clone := *t
@@ -228,6 +232,22 @@ func TestAuthenticateThrottlesLastUsedWrites(t *testing.T) {
 	}
 }
 
+func TestAuthenticatePropagatesNonNotFoundRepoErrors(t *testing.T) {
+	svc, repo, _ := newTestService()
+	ctx := context.Background()
+
+	sentinel := errors.New("database is on fire")
+	repo.getByHashErr = sentinel
+
+	_, err := svc.Authenticate(ctx, "orcal_whatever")
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("a repository failure must propagate unchanged, got %v", err)
+	}
+	if errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("a repository failure must not be reported as unauthorized, got %v", err)
+	}
+}
+
 func TestRevokeIsIdempotentAndGuardsTheLastAdmin(t *testing.T) {
 	svc, _, _ := newTestService()
 	ctx := context.Background()
@@ -255,6 +275,26 @@ func TestRevokeIsIdempotentAndGuardsTheLastAdmin(t *testing.T) {
 	}
 	if err := svc.Revoke(ctx, "missing"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("revoking an unknown id must report ErrNotFound, got %v", err)
+	}
+}
+
+func TestRevokeLastAdminGuardExcludesExpiredAdmin(t *testing.T) {
+	svc, _, now := newTestService()
+	ctx := context.Background()
+
+	if _, _, err := svc.Create(ctx,
+		CreateOptions{Name: "root", Scopes: Scopes{ScopeAll}, ExpiresIn: time.Hour}, Scopes{ScopeAll}); err != nil {
+		t.Fatalf("create expiring admin: %v", err)
+	}
+	live, _, err := svc.Create(ctx, CreateOptions{Name: "ops", Scopes: Scopes{ScopeAdmin}}, Scopes{ScopeAll})
+	if err != nil {
+		t.Fatalf("create live admin: %v", err)
+	}
+
+	svc.now = func() time.Time { return now.Add(2 * time.Hour) }
+
+	if err := svc.Revoke(ctx, live.ID); !errors.Is(err, ErrLastAdminToken) {
+		t.Fatalf("an expired admin must not count toward the remaining admins, got %v", err)
 	}
 }
 
