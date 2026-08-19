@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
@@ -62,11 +63,18 @@ func (d *Docker) ReadArchive(ctx context.Context, id, p string) (io.ReadCloser, 
 	return rc, nil
 }
 
+func isOverwriteTypeMismatch(err error) bool {
+	return strings.Contains(err.Error(), "cannot overwrite")
+}
+
 func (d *Docker) WriteArchive(ctx context.Context, id, destDir string, r io.Reader) error {
 	err := d.cli.CopyToContainer(ctx, id, destDir, r, container.CopyToContainerOptions{})
 	if err != nil {
 		if d.containerVanished(ctx, id, err) {
 			return fmt.Errorf("%w: container %s", runtime.ErrNotFound, id)
+		}
+		if isOverwriteTypeMismatch(err) {
+			return fmt.Errorf("%w: %v", runtime.ErrConflict, err)
 		}
 		return translatePath(err, destDir)
 	}

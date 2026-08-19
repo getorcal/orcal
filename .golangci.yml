@@ -62,8 +62,9 @@ linters:
           - noctx
       # translate() formats causes with %v on purpose so Docker's concrete error types cannot
       # escape the runtime abstraction via errors.As. See the comment on translate and
-      # TestTranslateDoesNotLeakUnclassifiedDockerErrorType.
-      - path: internal/runtime/docker/docker\.go
+      # TestTranslateDoesNotLeakUnclassifiedDockerErrorType. files.go follows the same rule
+      # for the same reason when it wraps a raw Docker error alongside a runtime sentinel.
+      - path: internal/runtime/docker/(docker|files)\.go
         linters:
           - errorlint
 

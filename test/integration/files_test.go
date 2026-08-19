@@ -454,6 +454,37 @@ func TestFileOpsReportVanishedContainerNotMissingPath(t *testing.T) {
 	assertVanishedContainerReported(t, listErr)
 }
 
+func TestUploadArchiveTypeMismatchReturnsConflictNotInternalError(t *testing.T) {
+	e := newEnv(t)
+	ref := e.sandbox(t, "type-mismatch")
+	ctx := context.Background()
+
+	if err := e.client.WriteFile(ctx, ref, "/app/flip/thing", bytes.NewReader([]byte("i am a file"))); err != nil {
+		t.Fatalf("seed file error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	if err := tw.WriteHeader(&tar.Header{Name: "flip/", Mode: 0o755, Typeflag: tar.TypeDir}); err != nil {
+		t.Fatalf("tar dir header(flip): %v", err)
+	}
+	if err := tw.WriteHeader(&tar.Header{Name: "flip/thing/", Mode: 0o755, Typeflag: tar.TypeDir}); err != nil {
+		t.Fatalf("tar dir header(flip/thing): %v", err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatalf("tar close: %v", err)
+	}
+
+	err := e.client.UploadArchive(ctx, ref, "/app", &buf)
+	var apiErr *orcalclient.APIError
+	if !asAPIError(err, &apiErr) {
+		t.Fatalf("UploadArchive() error = %v, want an *orcalclient.APIError", err)
+	}
+	if apiErr.StatusCode != http.StatusConflict || apiErr.Code != "invalid_state" {
+		t.Errorf("code = %q status = %d, want invalid_state/409 for a type mismatch, not an internal error", apiErr.Code, apiErr.StatusCode)
+	}
+}
+
 func TestConcurrentUploadAndSnapshotBothSucceedWithAConsistentForkedTree(t *testing.T) {
 	e := newEnv(t)
 	ref := e.sandbox(t, "concurrent-upload")
