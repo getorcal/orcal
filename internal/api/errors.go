@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/getorcal/orcal/internal/apigen"
+	"github.com/getorcal/orcal/internal/auth"
 	"github.com/getorcal/orcal/internal/exec"
 	"github.com/getorcal/orcal/internal/files"
 	"github.com/getorcal/orcal/internal/runtime"
@@ -17,10 +18,13 @@ import (
 type ErrorCode = apigen.ErrorBodyCode
 
 var ErrInvalidRequest = errors.New("api: invalid request")
+var ErrForbidden = errors.New("api: forbidden")
 
 const (
 	CodeInvalidRequest     ErrorCode = apigen.InvalidRequest
 	CodeUnauthorized       ErrorCode = apigen.Unauthorized
+	CodeForbidden          ErrorCode = apigen.Forbidden
+	CodeTokenNotFound      ErrorCode = apigen.TokenNotFound
 	CodeSandboxNotFound    ErrorCode = apigen.SandboxNotFound
 	CodeExecNotFound       ErrorCode = apigen.ExecNotFound
 	CodeSnapshotNotFound   ErrorCode = apigen.SnapshotNotFound
@@ -51,6 +55,16 @@ func classify(err error) (int, ErrorCode) {
 		return http.StatusRequestEntityTooLarge, CodeResourceExhausted
 	case errors.Is(err, files.ErrInvalidPath), errors.Is(err, files.ErrNotRegular),
 		errors.Is(err, files.ErrUnsafeEntry), errors.Is(err, files.ErrNotDirectory):
+		return http.StatusBadRequest, CodeInvalidRequest
+	case errors.Is(err, ErrForbidden), errors.Is(err, auth.ErrScopeEscalation):
+		return http.StatusForbidden, CodeForbidden
+	case errors.Is(err, auth.ErrNotFound):
+		return http.StatusNotFound, CodeTokenNotFound
+	case errors.Is(err, auth.ErrLastAdminToken):
+		return http.StatusConflict, CodeInvalidState
+	case errors.Is(err, auth.ErrNameTaken):
+		return http.StatusConflict, CodeNameTaken
+	case errors.Is(err, auth.ErrInvalidScope), errors.Is(err, auth.ErrInvalidName):
 		return http.StatusBadRequest, CodeInvalidRequest
 	case errors.Is(err, sandbox.ErrNotFound):
 		return http.StatusNotFound, CodeSandboxNotFound

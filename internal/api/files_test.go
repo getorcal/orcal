@@ -18,7 +18,7 @@ func (h *harness) doRaw(t *testing.T, method, path, contentType string, body []b
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+testToken)
+	req.Header.Set("Authorization", "Bearer "+h.token)
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}

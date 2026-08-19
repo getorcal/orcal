@@ -45,6 +45,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SandboxList" }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
     post:
       operationId: createSandbox
       requestBody:
@@ -60,6 +61,7 @@ paths:
               schema: { $ref: "#/components/schemas/Sandbox" }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "503": { $ref: "#/components/responses/Error" }
@@ -75,6 +77,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Sandbox" }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
     delete:
       operationId: destroySandbox
@@ -85,6 +88,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Sandbox" }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
   /sandboxes/{ref}/start:
@@ -99,6 +103,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Sandbox" }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
   /sandboxes/{ref}/stop:
@@ -113,6 +118,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Sandbox" }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
   /sandboxes/{ref}/execs:
@@ -130,6 +136,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ExecList" }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
     post:
       operationId: createExec
@@ -146,6 +153,7 @@ paths:
               schema: { $ref: "#/components/schemas/Exec" }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
   /execs/{id}:
@@ -160,6 +168,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Exec" }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
   /execs/{id}/output:
     parameters:
@@ -175,6 +184,7 @@ paths:
               schema: { type: string }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
   /sandboxes/{ref}/snapshots:
     parameters:
@@ -191,6 +201,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SnapshotList" }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
     post:
       operationId: createSnapshot
@@ -207,6 +218,7 @@ paths:
               schema: { $ref: "#/components/schemas/Snapshot" }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "503": { $ref: "#/components/responses/Error" }
@@ -228,6 +240,7 @@ paths:
               schema: { $ref: "#/components/schemas/Sandbox" }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
   /snapshots:
@@ -244,6 +257,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SnapshotList" }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
   /sandboxes/{ref}/files:
     parameters:
@@ -259,6 +273,7 @@ paths:
               schema: { type: string, format: binary }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "503": { $ref: "#/components/responses/Error" }
@@ -274,6 +289,7 @@ paths:
           description: File written
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "413": { $ref: "#/components/responses/Error" }
@@ -292,6 +308,7 @@ paths:
               schema: { $ref: "#/components/schemas/FileInfo" }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "503": { $ref: "#/components/responses/Error" }
@@ -309,6 +326,7 @@ paths:
               schema: { $ref: "#/components/schemas/FileList" }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "503": { $ref: "#/components/responses/Error" }
@@ -326,6 +344,7 @@ paths:
               schema: { type: string, format: binary }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "503": { $ref: "#/components/responses/Error" }
@@ -341,6 +360,7 @@ paths:
           description: Archive extracted
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "413": { $ref: "#/components/responses/Error" }
@@ -357,6 +377,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Snapshot" }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
     delete:
       operationId: deleteSnapshot
@@ -364,6 +385,7 @@ paths:
         "204":
           description: Deleted
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
 components:
@@ -546,6 +568,8 @@ components:
           enum:
             - invalid_request
             - unauthorized
+            - forbidden
+            - token_not_found
             - sandbox_not_found
             - snapshot_not_found
             - exec_not_found

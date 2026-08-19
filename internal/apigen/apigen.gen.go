@@ -10,6 +10,7 @@ import (
 // Defines values for ErrorBodyCode.
 const (
 	ExecNotFound       ErrorBodyCode = "exec_not_found"
+	Forbidden          ErrorBodyCode = "forbidden"
 	InternalError      ErrorBodyCode = "internal_error"
 	InvalidRequest     ErrorBodyCode = "invalid_request"
 	InvalidState       ErrorBodyCode = "invalid_state"
@@ -19,6 +20,7 @@ const (
 	RuntimeUnavailable ErrorBodyCode = "runtime_unavailable"
 	SandboxNotFound    ErrorBodyCode = "sandbox_not_found"
 	SnapshotNotFound   ErrorBodyCode = "snapshot_not_found"
+	TokenNotFound      ErrorBodyCode = "token_not_found"
 	Unauthorized       ErrorBodyCode = "unauthorized"
 )
 
@@ -26,6 +28,8 @@ const (
 func (e ErrorBodyCode) Valid() bool {
 	switch e {
 	case ExecNotFound:
+		return true
+	case Forbidden:
 		return true
 	case InternalError:
 		return true
@@ -44,6 +48,8 @@ func (e ErrorBodyCode) Valid() bool {
 	case SandboxNotFound:
 		return true
 	case SnapshotNotFound:
+		return true
+	case TokenNotFound:
 		return true
 	case Unauthorized:
 		return true

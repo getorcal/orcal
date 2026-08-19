@@ -57,9 +57,9 @@ func exitCode(err error) int {
 	var apiErr *orcalclient.APIError
 	if errors.As(err, &apiErr) {
 		switch apiErr.Code {
-		case "sandbox_not_found", "exec_not_found", "snapshot_not_found", "path_not_found":
+		case "sandbox_not_found", "exec_not_found", "snapshot_not_found", "path_not_found", "token_not_found":
 			return exitNotFound
-		case "unauthorized":
+		case "unauthorized", "forbidden":
 			return exitAuth
 		case "invalid_request":
 			return exitUsage

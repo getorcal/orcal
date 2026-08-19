@@ -208,7 +208,7 @@ func TestCreateSnapshotWithChunkedBodyIsNotSilentlyDropped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+testToken)
+	req.Header.Set("Authorization", "Bearer "+h.token)
 	req.Header.Set("Content-Type", "application/json")
 	if req.ContentLength != 0 {
 		t.Fatalf("ContentLength = %d, want 0 (unknown) so the transport sends this chunked", req.ContentLength)

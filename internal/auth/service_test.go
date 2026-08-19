@@ -8,89 +8,25 @@ import (
 )
 
 type memRepo struct {
-	tokens       []*Token
+	*MemoryRepo
 	touched      int
 	getByHashErr error
 }
 
-func (m *memRepo) Create(_ context.Context, t *Token) error {
-	for _, existing := range m.tokens {
-		if existing.Name == t.Name && existing.RevokedAt == nil {
-			return ErrNameTaken
-		}
-	}
-	clone := *t
-	m.tokens = append(m.tokens, &clone)
-	return nil
+func (m *memRepo) TouchLastUsed(ctx context.Context, id string, at time.Time) error {
+	m.touched++
+	return m.MemoryRepo.TouchLastUsed(ctx, id, at)
 }
 
-func (m *memRepo) Get(_ context.Context, id string) (*Token, error) {
-	for _, t := range m.tokens {
-		if t.ID == id {
-			clone := *t
-			return &clone, nil
-		}
-	}
-	return nil, ErrNotFound
-}
-
-func (m *memRepo) GetByHash(_ context.Context, hash string) (*Token, error) {
+func (m *memRepo) GetByHash(ctx context.Context, hash string) (*Token, error) {
 	if m.getByHashErr != nil {
 		return nil, m.getByHashErr
 	}
-	for _, t := range m.tokens {
-		if t.Hash == hash {
-			clone := *t
-			return &clone, nil
-		}
-	}
-	return nil, ErrNotFound
-}
-
-func (m *memRepo) GetByName(_ context.Context, name string) (*Token, error) {
-	for _, t := range m.tokens {
-		if t.Name == name && t.RevokedAt == nil {
-			clone := *t
-			return &clone, nil
-		}
-	}
-	return nil, ErrNotFound
-}
-
-func (m *memRepo) List(_ context.Context) ([]*Token, error) {
-	out := make([]*Token, 0, len(m.tokens))
-	for _, t := range m.tokens {
-		clone := *t
-		out = append(out, &clone)
-	}
-	return out, nil
-}
-
-func (m *memRepo) Update(_ context.Context, t *Token) error {
-	for i, existing := range m.tokens {
-		if existing.ID == t.ID {
-			clone := *t
-			m.tokens[i] = &clone
-			return nil
-		}
-	}
-	return ErrNotFound
-}
-
-func (m *memRepo) TouchLastUsed(_ context.Context, id string, at time.Time) error {
-	m.touched++
-	for _, t := range m.tokens {
-		if t.ID == id {
-			stamp := at
-			t.LastUsedAt = &stamp
-			return nil
-		}
-	}
-	return ErrNotFound
+	return m.MemoryRepo.GetByHash(ctx, hash)
 }
 
 func newTestService() (*Service, *memRepo, *time.Time) {
-	repo := &memRepo{}
+	repo := &memRepo{MemoryRepo: NewMemoryRepo()}
 	now := time.Date(2026, 8, 19, 12, 0, 0, 0, time.UTC)
 	svc := NewService(repo)
 	svc.now = func() time.Time { return now }

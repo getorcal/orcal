@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -74,37 +73,4 @@ func ValidateName(name string) error {
 		return fmt.Errorf("%w: name must not end with a hyphen", ErrInvalidName)
 	}
 	return nil
-}
-
-func Verify(hash, token string) bool {
-	if token == "" {
-		return false
-	}
-	return subtle.ConstantTimeCompare([]byte(hash), []byte(HashToken(token))) == 1
-}
-
-func Ensure(ctx context.Context, store SettingsStore, configured string) (string, bool, error) {
-	if configured != "" {
-		if err := store.Set(ctx, SettingKey, HashToken(configured)); err != nil {
-			return "", false, err
-		}
-		return configured, false, nil
-	}
-
-	_, found, err := store.Get(ctx, SettingKey)
-	if err != nil {
-		return "", false, err
-	}
-	if found {
-		return "", false, nil
-	}
-
-	token, err := GenerateToken()
-	if err != nil {
-		return "", false, err
-	}
-	if err := store.Set(ctx, SettingKey, HashToken(token)); err != nil {
-		return "", false, err
-	}
-	return token, true, nil
 }

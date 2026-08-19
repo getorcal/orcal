@@ -24,8 +24,6 @@ import (
 	"github.com/getorcal/orcal/pkg/orcalclient"
 )
 
-const token = "client-token"
-
 func newClient(t *testing.T) (*orcalclient.Client, *fake.Fake, *exec.Service) {
 	t.Helper()
 	dir := t.TempDir()
@@ -51,12 +49,18 @@ func newClient(t *testing.T) (*orcalclient.Client, *fake.Fake, *exec.Service) {
 		ListMaxScanBytes: 1 << 20,
 	})
 
+	tokens := auth.NewService(auth.NewMemoryRepo())
+	_, token, err := tokens.Create(context.Background(), auth.CreateOptions{Name: "client", Scopes: auth.Scopes{auth.ScopeAll}}, auth.Scopes{auth.ScopeAll})
+	if err != nil {
+		t.Fatalf("mint client token: %v", err)
+	}
+
 	srv := httptest.NewServer(api.NewServer(api.Options{
 		Sandboxes: sandboxes,
 		Execs:     execs,
 		Snapshots: snapshots,
 		Files:     fileSvc,
-		TokenHash: auth.HashToken(token),
+		Tokens:    tokens,
 		Version:   "test",
 		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}))

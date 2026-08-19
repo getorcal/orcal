@@ -35,7 +35,6 @@ import (
 
 const (
 	testImage   = "alpine:3.20"
-	testToken   = "integration-token"
 	testNetwork = "orcal-integration"
 )
 
@@ -103,12 +102,18 @@ func newEnv(t *testing.T) *env {
 		ListMaxScanBytes: 1 << 20,
 	})
 
+	tokens := auth.NewService(auth.NewMemoryRepo())
+	_, testToken, err := tokens.Create(ctx, auth.CreateOptions{Name: "integration", Scopes: auth.Scopes{auth.ScopeAll}}, auth.Scopes{auth.ScopeAll})
+	if err != nil {
+		t.Fatalf("mint integration token: %v", err)
+	}
+
 	srv := httptest.NewServer(api.NewServer(api.Options{
 		Sandboxes: sandboxes,
 		Execs:     execs,
 		Snapshots: snapshots,
 		Files:     fileSvc,
-		TokenHash: auth.HashToken(testToken),
+		Tokens:    tokens,
 		Version:   "integration",
 		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}))

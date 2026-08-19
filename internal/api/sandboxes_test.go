@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -21,12 +22,11 @@ import (
 	"github.com/getorcal/orcal/internal/store/sqlite"
 )
 
-const testToken = "test-token"
-
 type harness struct {
 	server *httptest.Server
 	fake   *fake.Fake
 	execs  *exec.Service
+	token  string
 }
 
 func newHarness(t *testing.T) *harness {
@@ -54,18 +54,24 @@ func newHarness(t *testing.T) *harness {
 		ListMaxScanBytes: 1 << 20,
 	})
 
+	tokens := auth.NewService(auth.NewMemoryRepo())
+	_, token, err := tokens.Create(context.Background(), auth.CreateOptions{Name: "test", Scopes: auth.Scopes{auth.ScopeAll}}, auth.Scopes{auth.ScopeAll})
+	if err != nil {
+		t.Fatalf("mint test token: %v", err)
+	}
+
 	srv := httptest.NewServer(api.NewServer(api.Options{
 		Sandboxes: sandboxes,
 		Execs:     execs,
 		Snapshots: snapshots,
 		Files:     fileSvc,
-		TokenHash: auth.HashToken(testToken),
+		Tokens:    tokens,
 		Version:   "test",
 		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}))
 	t.Cleanup(srv.Close)
 
-	return &harness{server: srv, fake: f, execs: execs}
+	return &harness{server: srv, fake: f, execs: execs, token: token}
 }
 
 func (h *harness) do(t *testing.T, method, path string, body any) *http.Response {
@@ -82,7 +88,7 @@ func (h *harness) do(t *testing.T, method, path string, body any) *http.Response
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+testToken)
+	req.Header.Set("Authorization", "Bearer "+h.token)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := h.server.Client().Do(req)

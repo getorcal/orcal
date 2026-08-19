@@ -17,7 +17,7 @@ type Options struct {
 	Execs     *exec.Service
 	Snapshots *snapshot.Service
 	Files     *files.Service
-	TokenHash string
+	Tokens    *auth.Service
 	Version   string
 	Logger    *slog.Logger
 }
@@ -27,6 +27,7 @@ type Server struct {
 	execs     *exec.Service
 	snapshots *snapshot.Service
 	files     *files.Service
+	tokens    *auth.Service
 	version   string
 	logger    *slog.Logger
 	handler   http.Handler
@@ -38,6 +39,7 @@ func NewServer(opts Options) *Server {
 		execs:     opts.Execs,
 		snapshots: opts.Snapshots,
 		files:     opts.Files,
+		tokens:    opts.Tokens,
 		version:   opts.Version,
 		logger:    opts.Logger,
 	}
@@ -50,13 +52,13 @@ func NewServer(opts Options) *Server {
 			public.Handle(pattern, r.Handler)
 			continue
 		}
-		private.Handle(pattern, r.Handler)
+		private.Handle(pattern, s.requireScope(r.Scope, r.Handler))
 	}
 
 	root := http.NewServeMux()
 	root.Handle("/v1/healthz", public)
 	root.Handle("/v1/version", public)
-	root.Handle("/", auth.Middleware(opts.TokenHash)(private))
+	root.Handle("/", s.authenticate(private))
 
 	s.handler = requestIDMiddleware(recoveryMiddleware(s.logger)(loggingMiddleware(s.logger)(root)))
 	return s

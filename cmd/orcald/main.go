@@ -67,19 +67,13 @@ func run() error {
 		logger.Warn("disk usage is not limited on this host: overlay2 on xfs with project quotas is required; a sandbox can fill the host disk")
 	}
 
-	token, generated, err := auth.Ensure(ctx, store.Settings(), cfg.Token)
+	tokens := auth.NewService(store.Tokens())
+	token, generated, err := tokens.Bootstrap(ctx, store.Settings(), cfg.Token)
 	if err != nil {
 		return err
 	}
 	if generated {
-		fmt.Fprintf(os.Stdout, "orcal: generated API token (shown once): %s\n", token)
-	}
-	tokenHash, found, err := store.Settings().Get(ctx, auth.SettingKey)
-	if err != nil {
-		return fmt.Errorf("read token hash: %w", err)
-	}
-	if !found {
-		return errors.New("no auth token hash persisted after Ensure")
+		fmt.Fprintf(os.Stdout, "orcal: generated API token with all scopes (shown once): %s\n", token)
 	}
 
 	defaults := sandbox.Resources{
@@ -122,7 +116,7 @@ func run() error {
 			Execs:     execs,
 			Snapshots: snapshots,
 			Files:     fileSvc,
-			TokenHash: tokenHash,
+			Tokens:    tokens,
 			Version:   version,
 			Logger:    logger,
 		}),

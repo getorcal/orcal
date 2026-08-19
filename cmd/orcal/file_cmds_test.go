@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"net/http/httptest"
@@ -43,12 +44,19 @@ func newCLIEnvWithListMaxEntries(t *testing.T, listMaxEntries int) *cliEnv {
 		ListMaxScanBytes: 1 << 20,
 	})
 
+	tokens := auth.NewService(auth.NewMemoryRepo())
+	_, plaintext, err := tokens.Create(context.Background(), auth.CreateOptions{Name: "cli", Scopes: auth.Scopes{auth.ScopeAll}}, auth.Scopes{auth.ScopeAll})
+	if err != nil {
+		t.Fatalf("mint cli token: %v", err)
+	}
+	cliToken = plaintext
+
 	srv := httptest.NewServer(api.NewServer(api.Options{
 		Sandboxes: sandboxes,
 		Execs:     execs,
 		Snapshots: snapshots,
 		Files:     fileSvc,
-		TokenHash: auth.HashToken(cliToken),
+		Tokens:    tokens,
 		Version:   "test",
 		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}))
