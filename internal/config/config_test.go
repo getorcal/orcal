@@ -76,6 +76,8 @@ func TestLoadRejectsNonPositiveNumericSettings(t *testing.T) {
 		"ORCAL_DEFAULT_CPU_MILLIS",
 		"ORCAL_DEFAULT_MEMORY_BYTES",
 		"ORCAL_DEFAULT_PIDS_LIMIT",
+		"ORCAL_AUDIT_RETENTION_DAYS",
+		"ORCAL_AUDIT_MAX_EVENTS",
 	}
 	for _, key := range keys {
 		for _, value := range []string{"0", "-1"} {
@@ -131,5 +133,34 @@ func TestLoadRejectsNegativeFileLimits(t *testing.T) {
 	t.Setenv("ORCAL_FILE_MAX_BYTES", "-1")
 	if _, err := Load(); err == nil {
 		t.Error("Load() error = nil, want a validation error for a negative limit")
+	}
+}
+
+func TestLoadAuditRetentionDefaults(t *testing.T) {
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.AuditRetentionDays != 90 {
+		t.Errorf("AuditRetentionDays = %d, want 90", cfg.AuditRetentionDays)
+	}
+	if cfg.AuditMaxEvents != 1000000 {
+		t.Errorf("AuditMaxEvents = %d, want 1000000", cfg.AuditMaxEvents)
+	}
+}
+
+func TestLoadAuditRetentionOverrides(t *testing.T) {
+	t.Setenv("ORCAL_AUDIT_RETENTION_DAYS", "30")
+	t.Setenv("ORCAL_AUDIT_MAX_EVENTS", "500")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.AuditRetentionDays != 30 {
+		t.Errorf("AuditRetentionDays = %d, want 30", cfg.AuditRetentionDays)
+	}
+	if cfg.AuditMaxEvents != 500 {
+		t.Errorf("AuditMaxEvents = %d, want 500", cfg.AuditMaxEvents)
 	}
 }
