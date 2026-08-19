@@ -229,6 +229,74 @@ func TestExtractArchiveRejectsEntriesEscapingTheLocalDestination(t *testing.T) {
 	}
 }
 
+func TestCopyRecursiveEmptyRemoteDirCreatesLocalDir(t *testing.T) {
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	if err := tw.WriteHeader(&tar.Header{
+		Name:     "app/",
+		Mode:     0o755,
+		Typeflag: tar.TypeDir,
+	}); err != nil {
+		t.Fatalf("write tar header: %v", err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatalf("close tar: %v", err)
+	}
+
+	dst := filepath.Join(t.TempDir(), "out")
+	if err := extractArchive(&buf, dst, true); err != nil {
+		t.Fatalf("extractArchive() error = %v", err)
+	}
+
+	info, err := os.Stat(dst)
+	if err != nil {
+		t.Fatalf("os.Stat(%q) error = %v, want the empty directory to have been created", dst, err)
+	}
+	if !info.IsDir() {
+		t.Errorf("%q is not a directory", dst)
+	}
+}
+
+func TestCopyRecursiveSingleRemoteFileStaysAFile(t *testing.T) {
+	body := []byte("package main")
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	if err := tw.WriteHeader(&tar.Header{
+		Name:     "f.go",
+		Mode:     0o644,
+		Size:     int64(len(body)),
+		Typeflag: tar.TypeReg,
+	}); err != nil {
+		t.Fatalf("write tar header: %v", err)
+	}
+	if _, err := tw.Write(body); err != nil {
+		t.Fatalf("write tar body: %v", err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatalf("close tar: %v", err)
+	}
+
+	dst := filepath.Join(t.TempDir(), "out.go")
+	if err := extractArchive(&buf, dst, true); err != nil {
+		t.Fatalf("extractArchive() error = %v", err)
+	}
+
+	info, err := os.Stat(dst)
+	if err != nil {
+		t.Fatalf("os.Stat(%q) error = %v, want the file to have been created", dst, err)
+	}
+	if info.IsDir() {
+		t.Fatalf("%q is a directory, want a regular file", dst)
+	}
+	got, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatalf("read %q: %v", dst, err)
+	}
+	if string(got) != string(body) {
+		t.Errorf("content = %q, want %q", got, body)
+	}
+}
+
 func TestCLICopyZeroRemoteEndpointsExitsUsageCode(t *testing.T) {
 	env := newCLIEnv(t)
 	dir := t.TempDir()

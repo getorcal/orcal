@@ -213,9 +213,6 @@ func extractArchive(rc io.Reader, destRoot string, stripRoot bool) error {
 		name := h.Name
 		if stripRoot {
 			name = stripFirstComponent(name)
-			if name == "" && h.Typeflag == tar.TypeDir {
-				continue
-			}
 		}
 		if err := extractEntry(tr, h, destRoot, name); err != nil {
 			return err
