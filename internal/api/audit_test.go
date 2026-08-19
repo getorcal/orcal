@@ -14,6 +14,7 @@ import (
 	"github.com/getorcal/orcal/internal/auth"
 	"github.com/getorcal/orcal/internal/runtime/fake"
 	"github.com/getorcal/orcal/internal/sandbox"
+	"github.com/getorcal/orcal/internal/snapshot"
 	"github.com/getorcal/orcal/internal/store/sqlite"
 )
 
@@ -29,12 +30,15 @@ func newAuditTestServer(t *testing.T) (*Server, *auth.Service, *audit.Service) {
 	f := fake.New()
 	defaults := sandbox.Resources{CPUMillis: 1000, MemoryBytes: 1 << 30, PidsLimit: 512}
 	sandboxes := sandbox.NewService(st.Sandboxes(), f, defaults, sandbox.Networks{Full: "orcal", Isolated: "orcal-isolated"})
+	snapshots := snapshot.NewService(st.Snapshots(), sandboxes, f)
+	sandboxes.SetSnapshots(snapshots)
 
 	tokens := auth.NewService(auth.NewMemoryRepo())
 	events := audit.NewService(audit.NewMemoryRepo(), audit.RetentionPolicy{})
 
 	srv := NewServer(Options{
 		Sandboxes: sandboxes,
+		Snapshots: snapshots,
 		Tokens:    tokens,
 		Audit:     events,
 		Version:   "test",
@@ -210,6 +214,9 @@ func TestNoEventEverCarriesASecret(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
+	if len(got) != 2 {
+		t.Fatalf("expected two events, got %d", len(got))
+	}
 	for _, e := range got {
 		encoded, _ := json.Marshal(e)
 		if strings.Contains(string(encoded), "super-secret-value") {
@@ -240,5 +247,57 @@ func TestStatusRecorderPreservesFlusher(t *testing.T) {
 	}
 	if _, ok := any(wrapped).(interface{ Unwrap() http.ResponseWriter }); !ok {
 		t.Fatal("the recorder must implement Unwrap so http.NewResponseController reaches the real writer")
+	}
+}
+
+type recordingFlusher struct {
+	*httptest.ResponseRecorder
+	flushes int
+}
+
+func (f *recordingFlusher) Flush() {
+	f.flushes++
+	f.ResponseRecorder.Flush()
+}
+
+func TestStatusRecorderFlushDelegatesToTheWrappedFlusher(t *testing.T) {
+	inner := &recordingFlusher{ResponseRecorder: httptest.NewRecorder()}
+	wrapped := &statusRecorder{ResponseWriter: inner, status: http.StatusOK}
+
+	wrapped.Flush()
+
+	if inner.flushes != 1 {
+		t.Fatalf("expected Flush to delegate to the wrapped flusher exactly once, got %d calls", inner.flushes)
+	}
+}
+
+func TestForkedSandboxIsAuditedAsAFork(t *testing.T) {
+	srv, svc, events := newAuditTestServer(t)
+	token := mint(t, svc, "root", auth.Scopes{auth.ScopeAll})
+
+	created := postJSON(srv, "/v1/sandboxes", token, map[string]any{"name": "parent", "image": "alpine"})
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", created.Code, created.Body.String())
+	}
+
+	snap := postJSON(srv, "/v1/sandboxes/parent/snapshots", token, map[string]any{"name": "v1"})
+	if snap.Code != http.StatusCreated {
+		t.Fatalf("snapshot: %d %s", snap.Code, snap.Body.String())
+	}
+
+	forked := postJSON(srv, "/v1/sandboxes", token, map[string]any{"name": "child", "snapshot": "v1"})
+	if forked.Code != http.StatusCreated {
+		t.Fatalf("fork: %d %s", forked.Code, forked.Body.String())
+	}
+
+	got, err := events.List(context.Background(), audit.Filter{Action: audit.ActionSandboxFork})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected one sandbox.fork event, got %d", len(got))
+	}
+	if got[0].Action != audit.ActionSandboxFork {
+		t.Fatalf("a sandbox created from a snapshot must be recorded as sandbox.fork, not %q", got[0].Action)
 	}
 }
