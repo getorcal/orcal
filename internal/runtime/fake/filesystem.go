@@ -126,7 +126,7 @@ func (f *Fake) ReadArchive(ctx context.Context, id, p string) (io.ReadCloser, er
 	write := func(name string, n *fileNode) error {
 		h := &tar.Header{
 			Name:     name,
-			Mode:     int64(n.mode.Perm()),
+			Mode:     int64(n.mode),
 			ModTime:  n.modTime,
 			Typeflag: tar.TypeReg,
 		}
@@ -202,7 +202,7 @@ func (f *Fake) WriteArchive(ctx context.Context, id, destDir string, r io.Reader
 		target := path.Join(destDir, path.Clean(h.Name))
 		switch h.Typeflag {
 		case tar.TypeDir:
-			files[target] = &fileNode{mode: fs.FileMode(h.Mode).Perm(), isDir: true, modTime: h.ModTime}
+			files[target] = &fileNode{mode: fs.FileMode(h.Mode), isDir: true, modTime: h.ModTime}
 		case tar.TypeReg:
 			body, err := io.ReadAll(tr)
 			if err != nil {
@@ -213,7 +213,7 @@ func (f *Fake) WriteArchive(ctx context.Context, id, destDir string, r io.Reader
 					files[dir] = &fileNode{mode: 0o755, isDir: true, modTime: h.ModTime}
 				}
 			}
-			files[target] = &fileNode{mode: fs.FileMode(h.Mode).Perm(), data: body, modTime: h.ModTime}
+			files[target] = &fileNode{mode: fs.FileMode(h.Mode), data: body, modTime: h.ModTime}
 		default:
 			return fmt.Errorf("fake: unsupported tar entry type %v", h.Typeflag)
 		}
