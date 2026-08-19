@@ -3,10 +3,14 @@ package files
 import (
 	"archive/tar"
 	"fmt"
-	"io/fs"
 	"path"
 	"slices"
 	"strings"
+)
+
+const (
+	tarModeSetuid = 0o4000
+	tarModeSetgid = 0o2000
 )
 
 func ValidatePath(p string) (string, error) {
@@ -51,7 +55,7 @@ func SanitizeEntry(h *tar.Header, destDir string) error {
 		}
 	}
 
-	h.Mode = int64(fs.FileMode(h.Mode) & ^(fs.ModeSetuid | fs.ModeSetgid))
+	h.Mode &^= tarModeSetuid | tarModeSetgid
 	h.Uid, h.Gid = 0, 0
 	h.Uname, h.Gname = "", ""
 	if h.Typeflag == tar.TypeDir {

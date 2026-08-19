@@ -3,7 +3,6 @@ package files
 import (
 	"archive/tar"
 	"errors"
-	"io/fs"
 	"testing"
 )
 
@@ -127,14 +126,14 @@ func TestSanitizeEntryRejectsSpecialFileTypes(t *testing.T) {
 }
 
 func TestSanitizeEntryStripsSetuidAndSetgid(t *testing.T) {
-	h := &tar.Header{Name: "tool", Typeflag: tar.TypeReg, Mode: int64(fs.ModeSetuid | fs.ModeSetgid | 0o755)}
+	h := &tar.Header{Name: "tool", Typeflag: tar.TypeReg, Mode: 0o6755}
 	if err := SanitizeEntry(h, "/app"); err != nil {
 		t.Fatalf("SanitizeEntry() error = %v", err)
 	}
-	if fs.FileMode(h.Mode)&(fs.ModeSetuid|fs.ModeSetgid) != 0 {
-		t.Errorf("Mode = %v, want setuid and setgid cleared", fs.FileMode(h.Mode))
+	if h.Mode&(tarModeSetuid|tarModeSetgid) != 0 {
+		t.Errorf("Mode = %#o, want setuid and setgid cleared", h.Mode)
 	}
-	if fs.FileMode(h.Mode).Perm() != 0o755 {
-		t.Errorf("Perm = %v, want 0755 preserved", fs.FileMode(h.Mode).Perm())
+	if h.Mode&0o777 != 0o755 {
+		t.Errorf("Mode = %#o, want 0755 preserved", h.Mode)
 	}
 }

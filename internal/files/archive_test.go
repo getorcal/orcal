@@ -154,7 +154,7 @@ func TestUploadArchiveStripsSetuid(t *testing.T) {
 	svc, _, _ := newService(t)
 	ctx := context.Background()
 	body := tarOf(t, &tar.Header{
-		Name: "tool", Mode: int64(fs.ModeSetuid | 0o755), Size: 1, Typeflag: tar.TypeReg,
+		Name: "tool", Mode: 0o4755, Size: 1, Typeflag: tar.TypeReg,
 	})
 
 	if err := svc.UploadArchive(ctx, "my-agent", "/app", bytes.NewReader(body)); err != nil {
