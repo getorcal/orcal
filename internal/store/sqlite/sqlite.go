@@ -9,6 +9,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	"github.com/getorcal/orcal/internal/auth"
 	"github.com/getorcal/orcal/internal/exec"
 	"github.com/getorcal/orcal/internal/sandbox"
 	"github.com/getorcal/orcal/internal/snapshot"
@@ -87,5 +88,7 @@ func (s *Store) Execs() exec.Repo { return &execRepo{db: s.db} }
 func (s *Store) Snapshots() snapshot.Repo { return &snapshotRepo{db: s.db} }
 
 func (s *Store) Settings() *SettingsStore { return &SettingsStore{db: s.db} }
+
+func (s *Store) Tokens() auth.Repo { return &tokenRepo{db: s.db} }
 
 func (s *Store) Close() error { return s.db.Close() }

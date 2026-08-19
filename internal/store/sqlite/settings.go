@@ -32,3 +32,10 @@ func (s *SettingsStore) Set(ctx context.Context, key, value string) error {
 	}
 	return nil
 }
+
+func (s *SettingsStore) Delete(ctx context.Context, key string) error {
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM settings WHERE key = ?`, key); err != nil {
+		return fmt.Errorf("sqlite: delete setting: %w", err)
+	}
+	return nil
+}
