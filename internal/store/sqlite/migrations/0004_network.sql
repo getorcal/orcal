@@ -1,0 +1,2 @@
+ALTER TABLE sandboxes ADD COLUMN network TEXT NOT NULL DEFAULT 'full';
+ALTER TABLE snapshots ADD COLUMN network TEXT NOT NULL DEFAULT 'full';

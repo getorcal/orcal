@@ -15,13 +15,13 @@ type snapshotRepo struct {
 	db *sql.DB
 }
 
-const snapshotColumns = `id, name, sandbox_id, parent_id, runtime_ref, image, size_bytes, created_at`
+const snapshotColumns = `id, name, sandbox_id, parent_id, runtime_ref, image, size_bytes, created_at, network`
 
 func (r *snapshotRepo) Create(ctx context.Context, s *snapshot.Snapshot) error {
 	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO snapshots (`+snapshotColumns+`) VALUES (?,?,?,?,?,?,?,?)`,
+		`INSERT INTO snapshots (`+snapshotColumns+`) VALUES (?,?,?,?,?,?,?,?,?)`,
 		s.ID, s.Name, s.SandboxID, s.ParentID, s.RuntimeRef, s.Image, s.SizeBytes,
-		s.CreatedAt.Format(timeFormat))
+		s.CreatedAt.Format(timeFormat), s.Network)
 	if err != nil {
 		if strings.Contains(err.Error(), "snapshots.name") {
 			return fmt.Errorf("%w: %s", snapshot.ErrNameTaken, s.Name)
@@ -106,7 +106,7 @@ func scanSnapshot(row scanner) (*snapshot.Snapshot, error) {
 		parent    sql.NullString
 		createdAt string
 	)
-	err := row.Scan(&s.ID, &s.Name, &s.SandboxID, &parent, &s.RuntimeRef, &s.Image, &s.SizeBytes, &createdAt)
+	err := row.Scan(&s.ID, &s.Name, &s.SandboxID, &parent, &s.RuntimeRef, &s.Image, &s.SizeBytes, &createdAt, &s.Network)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, snapshot.ErrNotFound
 	}

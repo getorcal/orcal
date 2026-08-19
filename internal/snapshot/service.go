@@ -16,6 +16,7 @@ type SandboxSource struct {
 	RuntimeID        string
 	Image            string
 	ParentSnapshotID *string
+	Network          string
 }
 
 // SandboxAccess is declared here, in the consuming package, rather than importing
@@ -71,6 +72,7 @@ func (s *Service) Create(ctx context.Context, opts CreateOptions) (*Snapshot, er
 			Image:      src.Image,
 			SizeBytes:  info.SizeBytes,
 			CreatedAt:  s.now(),
+			Network:    src.Network,
 		}
 		// The image exists before the row does, so a failed insert would orphan it on the host
 		// with nothing pointing at it. Roll the image back and report both failures.
@@ -99,12 +101,18 @@ func (s *Service) List(ctx context.Context, f Filter) ([]*Snapshot, error) {
 	return s.repo.List(ctx, f)
 }
 
-func (s *Service) Resolve(ctx context.Context, ref string) (string, string, error) {
+type Resolved struct {
+	RuntimeRef string
+	ID         string
+	Network    string
+}
+
+func (s *Service) Resolve(ctx context.Context, ref string) (Resolved, error) {
 	snap, err := s.Get(ctx, ref)
 	if err != nil {
-		return "", "", err
+		return Resolved{}, err
 	}
-	return snap.RuntimeRef, snap.ID, nil
+	return Resolved{RuntimeRef: snap.RuntimeRef, ID: snap.ID, Network: snap.Network}, nil
 }
 
 func (s *Service) Delete(ctx context.Context, ref string) error {

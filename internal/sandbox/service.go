@@ -28,7 +28,7 @@ type CreateOptions struct {
 // It is wired after construction via SetSnapshots because the two services are mutually
 // dependent; Fork and Restore return ErrSnapshotRequired if that wiring was skipped.
 type SnapshotLookup interface {
-	Resolve(ctx context.Context, ref string) (string, string, error)
+	Resolve(ctx context.Context, ref string) (snapshot.Resolved, error)
 }
 
 type Service struct {
@@ -328,6 +328,7 @@ func (s *Service) WithSnapshotSource(ctx context.Context, ref string, fn func(sn
 		RuntimeID:        sb.RuntimeID,
 		Image:            sb.Image,
 		ParentSnapshotID: sb.ParentSnapshotID,
+		Network:          string(sb.Network),
 	})
 }
 
@@ -335,12 +336,12 @@ func (s *Service) Fork(ctx context.Context, snapshotRef string, opts CreateOptio
 	if s.snapshots == nil {
 		return nil, ErrSnapshotRequired
 	}
-	runtimeRef, snapshotID, err := s.snapshots.Resolve(ctx, snapshotRef)
+	resolved, err := s.snapshots.Resolve(ctx, snapshotRef)
 	if err != nil {
 		return nil, err
 	}
 
-	opts.Image = runtimeRef
+	opts.Image = resolved.RuntimeRef
 	created, err := s.Create(ctx, opts)
 	if err != nil {
 		return nil, err
@@ -356,7 +357,7 @@ func (s *Service) Fork(ctx context.Context, snapshotRef string, opts CreateOptio
 	if err != nil {
 		return nil, err
 	}
-	fresh.ParentSnapshotID = &snapshotID
+	fresh.ParentSnapshotID = &resolved.ID
 	fresh.UpdatedAt = s.now()
 	if err := s.repo.Update(ctx, fresh); err != nil {
 		return nil, err
@@ -368,7 +369,7 @@ func (s *Service) Restore(ctx context.Context, sandboxRef, snapshotRef string) (
 	if s.snapshots == nil {
 		return nil, ErrSnapshotRequired
 	}
-	runtimeRef, snapshotID, err := s.snapshots.Resolve(ctx, snapshotRef)
+	resolved, err := s.snapshots.Resolve(ctx, snapshotRef)
 	if err != nil {
 		return nil, err
 	}
@@ -397,7 +398,7 @@ func (s *Service) Restore(ctx context.Context, sandboxRef, snapshotRef string) (
 
 	runtimeID, err := s.rt.Create(ctx, runtime.CreateSpec{
 		SandboxID:   sb.ID,
-		Image:       runtimeRef,
+		Image:       resolved.RuntimeRef,
 		Env:         sb.Env,
 		Labels:      sb.Labels,
 		CPUMillis:   sb.Resources.CPUMillis,
@@ -423,7 +424,7 @@ func (s *Service) Restore(ctx context.Context, sandboxRef, snapshotRef string) (
 	}
 
 	sb.State = StateRunning
-	sb.ParentSnapshotID = &snapshotID
+	sb.ParentSnapshotID = &resolved.ID
 	sb.UpdatedAt = s.now()
 	if err := s.repo.Update(ctx, sb); err != nil {
 		return nil, err

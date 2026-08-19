@@ -225,12 +225,12 @@ func TestResolveReturnsRuntimeRefAndID(t *testing.T) {
 	seedSandbox(t, st, "sb-1")
 	created, _ := svc.Create(ctx, snapshot.CreateOptions{SandboxRef: "sb-1", Name: "v1"})
 
-	ref, id, err := svc.Resolve(ctx, "v1")
+	resolved, err := svc.Resolve(ctx, "v1")
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
-	if ref != created.RuntimeRef || id != created.ID {
-		t.Errorf("Resolve() = %q/%q, want %q/%q", ref, id, created.RuntimeRef, created.ID)
+	if resolved.RuntimeRef != created.RuntimeRef || resolved.ID != created.ID {
+		t.Errorf("Resolve() = %q/%q, want %q/%q", resolved.RuntimeRef, resolved.ID, created.RuntimeRef, created.ID)
 	}
 }
 

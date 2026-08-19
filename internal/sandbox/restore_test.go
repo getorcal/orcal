@@ -32,8 +32,8 @@ type stubSnapshots struct {
 	err error
 }
 
-func (s stubSnapshots) Resolve(ctx context.Context, ref string) (string, string, error) {
-	return s.ref, s.id, s.err
+func (s stubSnapshots) Resolve(ctx context.Context, ref string) (snapshot.Resolved, error) {
+	return snapshot.Resolved{RuntimeRef: s.ref, ID: s.id}, s.err
 }
 
 func TestForkCreatesANewSandboxFromTheSnapshotRef(t *testing.T) {

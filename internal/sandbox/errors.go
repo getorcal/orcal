@@ -12,4 +12,5 @@ var (
 	ErrInvalidResources  = errors.New("sandbox: invalid resource limits")
 	ErrResourceExhausted = errors.New("sandbox: resource limit exceeded")
 	ErrSnapshotRequired  = errors.New("sandbox: snapshot lookup not configured")
+	ErrInvalidNetwork    = errors.New("sandbox: invalid network")
 )

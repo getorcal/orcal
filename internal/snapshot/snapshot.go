@@ -19,6 +19,7 @@ type Snapshot struct {
 	Image      string
 	SizeBytes  int64
 	CreatedAt  time.Time
+	Network    string
 }
 
 type Filter struct {
