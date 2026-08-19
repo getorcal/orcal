@@ -57,7 +57,7 @@ func TestWriteDoesNotDisturbAnExistingParent(t *testing.T) {
 	svc, f, access := newService(t)
 	ctx := context.Background()
 
-	f.Seed(access.RuntimeID(), "/app", 0o701, nil)
+	f.SeedDir(access.RuntimeID(), "/app", 0o701)
 	before, err := svc.Stat(ctx, "my-agent", "/app")
 	if err != nil {
 		t.Fatalf("Stat(/app) error = %v", err)

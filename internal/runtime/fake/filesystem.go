@@ -38,7 +38,26 @@ func (f *Fake) Seed(id, p string, mode fs.FileMode, data []byte) {
 			c.files[dir] = &fileNode{mode: 0o755, isDir: true, modTime: fakeModTime}
 		}
 	}
-	c.files[p] = &fileNode{mode: mode, data: data, isDir: data == nil, modTime: fakeModTime}
+	c.files[p] = &fileNode{mode: mode, data: data, modTime: fakeModTime}
+}
+
+func (f *Fake) SeedDir(id, p string, mode fs.FileMode) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c, ok := f.containers[id]
+	if !ok {
+		return
+	}
+	if c.files == nil {
+		c.files = map[string]*fileNode{"/": {mode: 0o755, isDir: true, modTime: fakeModTime}}
+	}
+	p = path.Clean(p)
+	for _, dir := range ancestors(p) {
+		if _, exists := c.files[dir]; !exists {
+			c.files[dir] = &fileNode{mode: 0o755, isDir: true, modTime: fakeModTime}
+		}
+	}
+	c.files[p] = &fileNode{mode: mode, isDir: true, modTime: fakeModTime}
 }
 
 var fakeModTime = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)

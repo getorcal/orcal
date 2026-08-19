@@ -59,6 +59,32 @@ func TestStatPathOnDirectory(t *testing.T) {
 	}
 }
 
+func TestSeedCreatesFilesAndSeedDirCreatesDirectories(t *testing.T) {
+	f, id := runningWithFile(t)
+	ctx := context.Background()
+
+	f.Seed(id, "/app/empty.txt", 0o644, nil)
+	got, err := f.StatPath(ctx, id, "/app/empty.txt")
+	if err != nil {
+		t.Fatalf("StatPath(empty.txt) error = %v", err)
+	}
+	if got.IsDir {
+		t.Error("Seed with nil data created a directory; it must always create a file")
+	}
+
+	f.SeedDir(id, "/app/sub", 0o701)
+	got, err = f.StatPath(ctx, id, "/app/sub")
+	if err != nil {
+		t.Fatalf("StatPath(sub) error = %v", err)
+	}
+	if !got.IsDir {
+		t.Error("SeedDir did not create a directory")
+	}
+	if got.Mode.Perm() != 0o701 {
+		t.Errorf("Mode = %v, want 0701", got.Mode.Perm())
+	}
+}
+
 func TestStatPathMissingReturnsErrPathNotFound(t *testing.T) {
 	f, id := runningWithFile(t)
 
