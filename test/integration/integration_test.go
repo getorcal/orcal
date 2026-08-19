@@ -76,12 +76,13 @@ func newEnv(t *testing.T) *env {
 	if err != nil {
 		t.Skipf("no Docker daemon available: %v", err)
 	}
-	if err := rt.EnsureNetwork(ctx, testNetwork); err != nil {
+	if err := rt.EnsureNetwork(ctx, testNetwork, false); err != nil {
 		t.Skipf("no Docker daemon available: %v", err)
 	}
 
 	sandboxes := sandbox.NewService(st.Sandboxes(), rt,
-		sandbox.Resources{CPUMillis: 1000, MemoryBytes: 512 << 20, PidsLimit: 128}, testNetwork)
+		sandbox.Resources{CPUMillis: 1000, MemoryBytes: 512 << 20, PidsLimit: 128},
+		sandbox.Networks{Full: testNetwork, Isolated: testNetwork + "-isolated"})
 	execs, err := exec.NewService(st.Execs(), sandboxes, rt, filepath.Join(dir, "execs"), 1<<20)
 	if err != nil {
 		t.Fatalf("exec.NewService() error = %v", err)

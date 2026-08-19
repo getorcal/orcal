@@ -32,7 +32,7 @@ func New(host string) (*Docker, error) {
 	return &Docker{cli: cli}, nil
 }
 
-func (d *Docker) EnsureNetwork(ctx context.Context, name string) error {
+func (d *Docker) EnsureNetwork(ctx context.Context, name string, internal bool) error {
 	_, err := d.cli.NetworkInspect(ctx, name, network.InspectOptions{})
 	if err == nil {
 		return nil
@@ -41,7 +41,8 @@ func (d *Docker) EnsureNetwork(ctx context.Context, name string) error {
 		return translate(err)
 	}
 	_, err = d.cli.NetworkCreate(ctx, name, network.CreateOptions{
-		Driver: "bridge",
+		Driver:   "bridge",
+		Internal: internal,
 		Options: map[string]string{
 			"com.docker.network.bridge.enable_icc": "false",
 		},

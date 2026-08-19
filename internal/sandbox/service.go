@@ -21,6 +21,7 @@ type CreateOptions struct {
 	Env       map[string]string
 	Labels    map[string]string
 	Resources Resources
+	Network   Network
 }
 
 // SnapshotLookup is the mirror of snapshot.SandboxAccess: each package declares the slice of
@@ -31,23 +32,35 @@ type SnapshotLookup interface {
 	Resolve(ctx context.Context, ref string) (snapshot.Resolved, error)
 }
 
+type Networks struct {
+	Full     string
+	Isolated string
+}
+
+func (n Networks) nameFor(mode Network) string {
+	if mode == NetworkNone {
+		return n.Isolated
+	}
+	return n.Full
+}
+
 type Service struct {
 	repo      Repo
 	rt        runtime.Runtime
 	defaults  Resources
-	network   string
+	networks  Networks
 	locks     *keyedMutex
 	now       func() time.Time
 	newID     func() string
 	snapshots SnapshotLookup
 }
 
-func NewService(repo Repo, rt runtime.Runtime, defaults Resources, network string) *Service {
+func NewService(repo Repo, rt runtime.Runtime, defaults Resources, networks Networks) *Service {
 	return &Service{
 		repo:     repo,
 		rt:       rt,
 		defaults: defaults,
-		network:  network,
+		networks: networks,
 		locks:    newKeyedMutex(),
 		now:      func() time.Time { return time.Now().UTC() },
 		newID:    id.New,
@@ -66,6 +79,12 @@ func (s *Service) Create(ctx context.Context, opts CreateOptions) (*Sandbox, err
 		}
 	}
 	if err := validateResources(opts.Resources); err != nil {
+		return nil, err
+	}
+	if opts.Network == "" {
+		opts.Network = NetworkFull
+	}
+	if err := ValidateNetwork(opts.Network); err != nil {
 		return nil, err
 	}
 
@@ -90,6 +109,7 @@ func (s *Service) Create(ctx context.Context, opts CreateOptions) (*Sandbox, err
 		Resources: res,
 		Env:       opts.Env,
 		Labels:    opts.Labels,
+		Network:   opts.Network,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -115,7 +135,7 @@ func (s *Service) Create(ctx context.Context, opts CreateOptions) (*Sandbox, err
 		CPUMillis:   res.CPUMillis,
 		MemoryBytes: res.MemoryBytes,
 		PidsLimit:   res.PidsLimit,
-		NetworkName: s.network,
+		NetworkName: s.networks.nameFor(opts.Network),
 	})
 	if err != nil {
 		return nil, s.markError(ctx, sb, err)
@@ -341,6 +361,9 @@ func (s *Service) Fork(ctx context.Context, snapshotRef string, opts CreateOptio
 		return nil, err
 	}
 
+	if opts.Network == "" && resolved.Network != "" {
+		opts.Network = Network(resolved.Network)
+	}
 	opts.Image = resolved.RuntimeRef
 	created, err := s.Create(ctx, opts)
 	if err != nil {
@@ -404,7 +427,7 @@ func (s *Service) Restore(ctx context.Context, sandboxRef, snapshotRef string) (
 		CPUMillis:   sb.Resources.CPUMillis,
 		MemoryBytes: sb.Resources.MemoryBytes,
 		PidsLimit:   sb.Resources.PidsLimit,
-		NetworkName: s.network,
+		NetworkName: s.networks.nameFor(sb.Network),
 	})
 	if err != nil {
 		return nil, s.markError(ctx, sb, err)

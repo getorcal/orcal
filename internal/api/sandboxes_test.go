@@ -40,7 +40,7 @@ func newHarness(t *testing.T) *harness {
 
 	f := fake.New()
 	defaults := sandbox.Resources{CPUMillis: 1000, MemoryBytes: 1 << 30, PidsLimit: 512}
-	sandboxes := sandbox.NewService(st.Sandboxes(), f, defaults, "orcal")
+	sandboxes := sandbox.NewService(st.Sandboxes(), f, defaults, sandbox.Networks{Full: "orcal", Isolated: "orcal-isolated"})
 	execs, err := exec.NewService(st.Execs(), sandboxes, f, filepath.Join(dir, "execs"), 1<<20)
 	if err != nil {
 		t.Fatalf("exec.NewService() error = %v", err)

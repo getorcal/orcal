@@ -25,7 +25,7 @@ func newService(t *testing.T) (*sandbox.Service, *fake.Fake) {
 	t.Cleanup(func() { st.Close() })
 	f := fake.New()
 	defaults := sandbox.Resources{CPUMillis: 1000, MemoryBytes: 1 << 30, PidsLimit: 512}
-	return sandbox.NewService(st.Sandboxes(), f, defaults, "orcal"), f
+	return sandbox.NewService(st.Sandboxes(), f, defaults, sandbox.Networks{Full: "orcal", Isolated: "orcal-isolated"}), f
 }
 
 func newServiceWithRuntime(t *testing.T, rt runtime.Runtime) *sandbox.Service {
@@ -36,7 +36,7 @@ func newServiceWithRuntime(t *testing.T, rt runtime.Runtime) *sandbox.Service {
 	}
 	t.Cleanup(func() { st.Close() })
 	defaults := sandbox.Resources{CPUMillis: 1000, MemoryBytes: 1 << 30, PidsLimit: 512}
-	return sandbox.NewService(st.Sandboxes(), rt, defaults, "orcal")
+	return sandbox.NewService(st.Sandboxes(), rt, defaults, sandbox.Networks{Full: "orcal", Isolated: "orcal-isolated"})
 }
 
 type erroringRuntime struct {
@@ -362,7 +362,7 @@ func TestCreateSerializesAgainstConcurrentStart(t *testing.T) {
 		}
 		rt := &spyRuntime{Fake: fake.New()}
 		defaults := sandbox.Resources{CPUMillis: 1000, MemoryBytes: 1 << 30, PidsLimit: 512}
-		svc := sandbox.NewService(st.Sandboxes(), rt, defaults, "orcal")
+		svc := sandbox.NewService(st.Sandboxes(), rt, defaults, sandbox.Networks{Full: "orcal", Isolated: "orcal-isolated"})
 		ctx := context.Background()
 		name := fmt.Sprintf("race-%d", i)
 

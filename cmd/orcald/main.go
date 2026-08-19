@@ -56,8 +56,12 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	if err := rt.EnsureNetwork(ctx, cfg.NetworkName); err != nil {
-		return fmt.Errorf("ensure network %s: %w", cfg.NetworkName, err)
+	networks := sandbox.Networks{Full: cfg.NetworkName, Isolated: cfg.NetworkName + "-isolated"}
+	if err := rt.EnsureNetwork(ctx, networks.Full, false); err != nil {
+		return fmt.Errorf("ensure network %s: %w", networks.Full, err)
+	}
+	if err := rt.EnsureNetwork(ctx, networks.Isolated, true); err != nil {
+		return fmt.Errorf("ensure network %s: %w", networks.Isolated, err)
 	}
 
 	quotaOK, err := rt.DiskQuotaSupported(ctx)
@@ -81,7 +85,7 @@ func run() error {
 		MemoryBytes: cfg.DefaultMemoryBytes,
 		PidsLimit:   cfg.DefaultPidsLimit,
 	}
-	sandboxes := sandbox.NewService(store.Sandboxes(), rt, defaults, cfg.NetworkName)
+	sandboxes := sandbox.NewService(store.Sandboxes(), rt, defaults, networks)
 	execs, err := exec.NewService(store.Execs(), sandboxes, rt, filepath.Join(cfg.DataDir, "execs"), cfg.ExecOutputMaxBytes)
 	if err != nil {
 		return err

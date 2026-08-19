@@ -122,7 +122,7 @@ func TestForkDoesNotClobberAConcurrentChangeToTheForkedSandbox(t *testing.T) {
 	}
 
 	defaults := sandbox.Resources{CPUMillis: 1000, MemoryBytes: 1 << 30, PidsLimit: 512}
-	svc := sandbox.NewService(repo, fake.New(), defaults, "orcal")
+	svc := sandbox.NewService(repo, fake.New(), defaults, sandbox.Networks{Full: "orcal", Isolated: "orcal-isolated"})
 	svc.SetSnapshots(stubSnapshots{ref: "sha256:snap", id: "sn-1"})
 	ctx := context.Background()
 
