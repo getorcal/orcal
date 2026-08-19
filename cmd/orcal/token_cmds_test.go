@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -84,33 +83,50 @@ func TestRenderTokenListShowsUnknownAndRevoked(t *testing.T) {
 	}
 }
 
-func TestTokenRevokeRendersHumanAndJSON(t *testing.T) {
-	testID := "tok-xyz"
+func TestCLITokenRevokeHumanAndJSON(t *testing.T) {
+	env := newCLIEnv(t)
+	env.run(t, "create", "--name", "my-agent", "--image", "alpine:3.20")
+
+	stdout, stderr, code := env.run(t, "token", "create", "--name", "test-token", "--scope", "sandboxes:read", "--output", "json")
+	if code != 0 {
+		t.Fatalf("create exit = %d, stderr = %s", code, stderr)
+	}
+	var created map[string]any
+	if err := json.Unmarshal([]byte(stdout), &created); err != nil {
+		t.Fatalf("not JSON: %v", err)
+	}
+	tokenID := created["id"].(string)
 
 	t.Run("human mode emits id alone", func(t *testing.T) {
-		var out bytes.Buffer
-		if got := out.String(); got != "" {
-			t.Fatalf("expected empty buffer, got %q", got)
+		out, _, code := env.run(t, "token", "revoke", tokenID)
+		if code != 0 {
+			t.Fatalf("revoke exit = %d", code)
 		}
-		_, err := fmt.Fprintln(&out, testID)
-		if err != nil {
-			t.Fatalf("error: %v", err)
-		}
-		if got := out.String(); got != testID+"\n" {
-			t.Fatalf("human mode must print id alone with newline, got %q", got)
+		if out != tokenID+"\n" {
+			t.Fatalf("human mode must print id alone, got %q", out)
 		}
 	})
 
+	stdout2, stderr2, code := env.run(t, "token", "create", "--name", "test-token-2", "--scope", "sandboxes:read", "--output", "json")
+	if code != 0 {
+		t.Fatalf("create exit = %d, stderr = %s", code, stderr2)
+	}
+	var created2 map[string]any
+	if err := json.Unmarshal([]byte(stdout2), &created2); err != nil {
+		t.Fatalf("not JSON: %v", err)
+	}
+	tokenID2 := created2["id"].(string)
+
 	t.Run("json mode emits document", func(t *testing.T) {
-		var out bytes.Buffer
-		if err := renderJSONLine(&out, map[string]any{"id": testID}); err != nil {
-			t.Fatalf("error: %v", err)
+		out, _, code := env.run(t, "token", "revoke", tokenID2, "--output", "json")
+		if code != 0 {
+			t.Fatalf("revoke exit = %d", code)
 		}
 		var decoded map[string]any
-		if err := json.Unmarshal(out.Bytes(), &decoded); err != nil {
+		if err := json.Unmarshal([]byte(out), &decoded); err != nil {
 			t.Fatalf("stdout must be valid JSON: %v", err)
 		}
-		if decoded["id"] != testID {
+		if decoded["id"] != tokenID2 {
 			t.Fatalf("json must carry id, got %v", decoded)
 		}
 	})
