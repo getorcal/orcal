@@ -49,12 +49,18 @@ func (s *Service) UploadArchive(ctx context.Context, ref, destDir string, body i
 		}
 
 		pr, pw := io.Pipe()
+		sanitizeErr := make(chan error, 1)
 		go func() {
-			pw.CloseWithError(sanitizeArchive(body, pw, cleaned, s.limits.ArchiveMaxBytes))
+			err := sanitizeArchive(body, pw, cleaned, s.limits.ArchiveMaxBytes)
+			pw.CloseWithError(err)
+			sanitizeErr <- err
 		}()
 
 		writeErr := s.rt.WriteArchive(ctx, runtimeID, cleaned, pr)
 		closeErr := pr.Close()
+		if err := <-sanitizeErr; err != nil {
+			return err
+		}
 		if writeErr != nil {
 			return writeErr
 		}
