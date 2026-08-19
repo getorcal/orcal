@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/getorcal/orcal/internal/api"
+	"github.com/getorcal/orcal/internal/audit"
 	"github.com/getorcal/orcal/internal/auth"
 	"github.com/getorcal/orcal/internal/exec"
 	"github.com/getorcal/orcal/internal/files"
@@ -62,6 +63,7 @@ func newClient(t *testing.T) (*orcalclient.Client, *fake.Fake, *exec.Service) {
 		Snapshots: snapshots,
 		Files:     fileSvc,
 		Tokens:    tokens,
+		Audit:     audit.NewService(audit.NewMemoryRepo(), audit.RetentionPolicy{}),
 		Version:   "test",
 		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}))

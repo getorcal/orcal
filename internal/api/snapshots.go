@@ -31,6 +31,10 @@ func (s *Server) handleCreateSnapshot(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, err)
 		return
 	}
+	annotate(r.Context(), func(a *annotation) {
+		a.resourceType = "snapshot"
+		a.resourceID = created.ID
+	})
 	writeJSON(w, http.StatusCreated, toAPISnapshot(created))
 }
 
@@ -86,10 +90,15 @@ func (s *Server) handleGetSnapshot(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteSnapshot(w http.ResponseWriter, r *http.Request) {
-	if err := s.snapshots.Delete(r.Context(), r.PathValue("ref")); err != nil {
+	ref := r.PathValue("ref")
+	if err := s.snapshots.Delete(r.Context(), ref); err != nil {
 		s.writeError(w, r, err)
 		return
 	}
+	annotate(r.Context(), func(a *annotation) {
+		a.resourceType = "snapshot"
+		a.resourceID = ref
+	})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -109,5 +118,9 @@ func (s *Server) handleRestoreSandbox(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, err)
 		return
 	}
+	annotate(r.Context(), func(a *annotation) {
+		a.resourceType = "sandbox"
+		a.resourceID = restored.ID
+	})
 	writeJSON(w, http.StatusOK, toAPISandbox(restored))
 }

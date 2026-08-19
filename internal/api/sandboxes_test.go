@@ -13,6 +13,7 @@ import (
 
 	"github.com/getorcal/orcal/internal/api"
 	"github.com/getorcal/orcal/internal/apigen"
+	"github.com/getorcal/orcal/internal/audit"
 	"github.com/getorcal/orcal/internal/auth"
 	"github.com/getorcal/orcal/internal/exec"
 	"github.com/getorcal/orcal/internal/files"
@@ -66,6 +67,7 @@ func newHarness(t *testing.T) *harness {
 		Snapshots: snapshots,
 		Files:     fileSvc,
 		Tokens:    tokens,
+		Audit:     audit.NewService(audit.NewMemoryRepo(), audit.RetentionPolicy{}),
 		Version:   "test",
 		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}))

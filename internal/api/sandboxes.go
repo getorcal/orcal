@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/getorcal/orcal/internal/apigen"
+	"github.com/getorcal/orcal/internal/audit"
 	"github.com/getorcal/orcal/internal/sandbox"
 )
 
@@ -63,6 +64,14 @@ func (s *Server) handleCreateSandbox(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, err)
 		return
 	}
+	annotate(r.Context(), func(a *annotation) {
+		if hasSnapshot {
+			a.action = audit.ActionSandboxFork
+		}
+		a.resourceType = "sandbox"
+		a.resourceID = created.ID
+		a.details = map[string]any{"image": created.Image, "network": string(created.Network)}
+	})
 	writeJSON(w, http.StatusCreated, toAPISandbox(created))
 }
 
@@ -126,6 +135,10 @@ func (s *Server) respondWithSandbox(w http.ResponseWriter, r *http.Request, act 
 		s.writeError(w, r, err)
 		return
 	}
+	annotate(r.Context(), func(a *annotation) {
+		a.resourceType = "sandbox"
+		a.resourceID = result.ID
+	})
 	writeJSON(w, http.StatusOK, toAPISandbox(result))
 }
 

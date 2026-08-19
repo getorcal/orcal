@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/getorcal/orcal/internal/apigen"
+	"github.com/getorcal/orcal/internal/audit"
 	"github.com/getorcal/orcal/internal/auth"
 	"github.com/getorcal/orcal/internal/exec"
 	"github.com/getorcal/orcal/internal/files"
@@ -18,6 +19,7 @@ type Options struct {
 	Snapshots *snapshot.Service
 	Files     *files.Service
 	Tokens    *auth.Service
+	Audit     *audit.Service
 	Version   string
 	Logger    *slog.Logger
 }
@@ -28,6 +30,7 @@ type Server struct {
 	snapshots *snapshot.Service
 	files     *files.Service
 	tokens    *auth.Service
+	audit     *audit.Service
 	version   string
 	logger    *slog.Logger
 	handler   http.Handler
@@ -40,6 +43,7 @@ func NewServer(opts Options) *Server {
 		snapshots: opts.Snapshots,
 		files:     opts.Files,
 		tokens:    opts.Tokens,
+		audit:     opts.Audit,
 		version:   opts.Version,
 		logger:    opts.Logger,
 	}
@@ -52,7 +56,7 @@ func NewServer(opts Options) *Server {
 			public.Handle(pattern, r.Handler)
 			continue
 		}
-		private.Handle(pattern, s.requireScope(r.Scope, r.Handler))
+		private.Handle(pattern, s.withRoute(r, s.requireScope(r.Scope, r.Handler)))
 	}
 
 	root := http.NewServeMux()
@@ -60,7 +64,7 @@ func NewServer(opts Options) *Server {
 	root.Handle("/v1/version", public)
 	root.Handle("/", s.authenticate(private))
 
-	s.handler = requestIDMiddleware(recoveryMiddleware(s.logger)(loggingMiddleware(s.logger)(root)))
+	s.handler = requestIDMiddleware(recoveryMiddleware(s.logger)(loggingMiddleware(s.logger)(s.auditMiddleware(root))))
 	return s
 }
 

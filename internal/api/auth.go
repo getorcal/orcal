@@ -45,6 +45,10 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 			writeUnauthorized(w)
 			return
 		}
+		annotate(r.Context(), func(a *annotation) {
+			a.actorTokenID = token.ID
+			a.actorName = token.Name
+		})
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), principalKey, token)))
 	})
 }
@@ -53,6 +57,9 @@ func (s *Server) requireScope(want auth.Scope, next http.HandlerFunc) http.Handl
 	return func(w http.ResponseWriter, r *http.Request) {
 		principal := principalFrom(r.Context())
 		if principal == nil || !principal.Scopes.Has(want) {
+			annotate(r.Context(), func(a *annotation) {
+				a.details = map[string]any{"required_scope": string(want)}
+			})
 			s.writeError(w, r, fmt.Errorf("%w: this token does not hold %s", ErrForbidden, want))
 			return
 		}

@@ -37,6 +37,10 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	annotate(r.Context(), func(a *annotation) {
+		a.resourceType = "token"
+		a.resourceID = created.ID
+	})
 	writeJSON(w, http.StatusCreated, apigen.CreatedToken{Token: plaintext, Id: created.ID, Name: created.Name,
 		Prefix: created.Prefix, Scopes: apiScopes(created.Scopes), CreatedAt: created.CreatedAt,
 		ExpiresAt: created.ExpiresAt, LastUsedAt: created.LastUsedAt, RevokedAt: created.RevokedAt})
@@ -61,5 +65,9 @@ func (s *Server) handleRevokeToken(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, err)
 		return
 	}
+	annotate(r.Context(), func(a *annotation) {
+		a.resourceType = "token"
+		a.resourceID = id
+	})
 	w.WriteHeader(http.StatusNoContent)
 }

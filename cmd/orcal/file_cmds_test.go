@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/getorcal/orcal/internal/api"
+	"github.com/getorcal/orcal/internal/audit"
 	"github.com/getorcal/orcal/internal/auth"
 	"github.com/getorcal/orcal/internal/exec"
 	"github.com/getorcal/orcal/internal/files"
@@ -58,6 +59,7 @@ func newCLIEnvWithListMaxEntries(t *testing.T, listMaxEntries int) *cliEnv {
 		Snapshots: snapshots,
 		Files:     fileSvc,
 		Tokens:    tokens,
+		Audit:     audit.NewService(audit.NewMemoryRepo(), audit.RetentionPolicy{}),
 		Version:   "test",
 		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}))

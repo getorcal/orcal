@@ -48,6 +48,10 @@ func (s *Server) handleCreateExec(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, err)
 		return
 	}
+	annotate(r.Context(), func(a *annotation) {
+		a.resourceType = "exec"
+		a.resourceID = created.ID
+	})
 	writeJSON(w, http.StatusCreated, toAPIExec(created))
 }
 

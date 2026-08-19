@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/getorcal/orcal/internal/audit"
 	"github.com/getorcal/orcal/internal/auth"
 )
 
@@ -20,7 +21,7 @@ func newAuthTestServer(t *testing.T) (*Server, *auth.Service) {
 	t.Helper()
 	repo := auth.NewMemoryRepo()
 	svc := auth.NewService(repo)
-	srv := NewServer(Options{Tokens: svc, Version: "test", Logger: testLogger()})
+	srv := NewServer(Options{Tokens: svc, Audit: audit.NewService(audit.NewMemoryRepo(), audit.RetentionPolicy{}), Version: "test", Logger: testLogger()})
 	return srv, svc
 }
 

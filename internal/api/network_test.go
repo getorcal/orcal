@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/getorcal/orcal/internal/apigen"
+	"github.com/getorcal/orcal/internal/audit"
 	"github.com/getorcal/orcal/internal/auth"
 	"github.com/getorcal/orcal/internal/runtime/fake"
 	"github.com/getorcal/orcal/internal/sandbox"
@@ -31,6 +32,7 @@ func newSandboxTestServer(t *testing.T) (*Server, *auth.Service) {
 	srv := NewServer(Options{
 		Sandboxes: sandboxes,
 		Tokens:    tokens,
+		Audit:     audit.NewService(audit.NewMemoryRepo(), audit.RetentionPolicy{}),
 		Version:   "test",
 		Logger:    testLogger(),
 	})

@@ -23,6 +23,7 @@ import (
 	"github.com/docker/docker/client"
 
 	"github.com/getorcal/orcal/internal/api"
+	"github.com/getorcal/orcal/internal/audit"
 	"github.com/getorcal/orcal/internal/auth"
 	"github.com/getorcal/orcal/internal/exec"
 	"github.com/getorcal/orcal/internal/files"
@@ -115,6 +116,7 @@ func newEnv(t *testing.T) *env {
 		Snapshots: snapshots,
 		Files:     fileSvc,
 		Tokens:    tokens,
+		Audit:     audit.NewService(audit.NewMemoryRepo(), audit.RetentionPolicy{}),
 		Version:   "integration",
 		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}))
