@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"path"
+	"time"
 
 	"github.com/getorcal/orcal/internal/runtime"
 )
@@ -80,6 +81,7 @@ func (s *Service) deepestExistingAncestor(ctx context.Context, runtimeID, target
 func buildFileTar(missingDirs []string, name string, body []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
+	now := time.Now().UTC()
 
 	prefix := ""
 	for _, d := range missingDirs {
@@ -88,6 +90,7 @@ func buildFileTar(missingDirs []string, name string, body []byte) ([]byte, error
 			Name:     prefix + "/",
 			Mode:     0o755,
 			Typeflag: tar.TypeDir,
+			ModTime:  now,
 		}); err != nil {
 			return nil, fmt.Errorf("files: write dir header: %w", err)
 		}
@@ -102,6 +105,7 @@ func buildFileTar(missingDirs []string, name string, body []byte) ([]byte, error
 		Mode:     0o644,
 		Size:     int64(len(body)),
 		Typeflag: tar.TypeReg,
+		ModTime:  now,
 	}); err != nil {
 		return nil, fmt.Errorf("files: write file header: %w", err)
 	}

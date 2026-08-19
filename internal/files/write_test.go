@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/getorcal/orcal/internal/files"
 )
@@ -140,6 +141,44 @@ func TestWriteRefusesToClobberADirectory(t *testing.T) {
 	}
 	if _, err := svc.Stat(ctx, "my-agent", "/app/worktree/important.go"); err != nil {
 		t.Errorf("child was destroyed: %v", err)
+	}
+}
+
+func TestWriteSetsRecentModTime(t *testing.T) {
+	svc, _, _ := newService(t)
+	ctx := context.Background()
+	before := time.Now().Add(-time.Minute)
+
+	if err := svc.Write(ctx, "my-agent", "/app/new.txt", strings.NewReader("hello")); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+
+	info, err := svc.Stat(ctx, "my-agent", "/app/new.txt")
+	if err != nil {
+		t.Fatalf("Stat() error = %v", err)
+	}
+	if info.ModTime.Before(before) {
+		t.Errorf("ModTime = %v, want at or after %v; a freshly written file must not land at the tar zero value", info.ModTime, before)
+	}
+}
+
+func TestWriteSetsRecentModTimeOnCreatedParents(t *testing.T) {
+	svc, _, _ := newService(t)
+	ctx := context.Background()
+	before := time.Now().Add(-time.Minute)
+
+	if err := svc.Write(ctx, "my-agent", "/app/deep/nested/f.txt", strings.NewReader("x")); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+
+	for _, dir := range []string{"/app/deep", "/app/deep/nested"} {
+		info, err := svc.Stat(ctx, "my-agent", dir)
+		if err != nil {
+			t.Fatalf("Stat(%q) error = %v", dir, err)
+		}
+		if info.ModTime.Before(before) {
+			t.Errorf("%q ModTime = %v, want at or after %v", dir, info.ModTime, before)
+		}
 	}
 }
 
