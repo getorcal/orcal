@@ -31,6 +31,9 @@ func TestListReturnsOneLevelOnly(t *testing.T) {
 	if names["inner.go"] || names["deep"] {
 		t.Errorf("listing is recursive; got %v", names)
 	}
+	if len(got.Items) != 3 {
+		t.Errorf("len(Items) = %d, want 3; a recursive listing collapses into the same name set, so only the count catches it", len(got.Items))
+	}
 	if got.Truncated {
 		t.Error("Truncated = true, want false for a small tree")
 	}
