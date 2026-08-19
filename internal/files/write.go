@@ -21,16 +21,16 @@ func (s *Service) Write(ctx context.Context, ref, p string, body io.Reader) erro
 		return fmt.Errorf("%w: cannot write to the filesystem root", ErrInvalidPath)
 	}
 
-	limited := io.LimitReader(body, s.limits.FileMaxBytes+1)
-	buf, err := io.ReadAll(limited)
-	if err != nil {
-		return fmt.Errorf("files: read body: %w", err)
-	}
-	if int64(len(buf)) > s.limits.FileMaxBytes {
-		return fmt.Errorf("%w: file exceeds %d bytes", ErrTooLarge, s.limits.FileMaxBytes)
-	}
-
 	return s.sandboxes.WithLockedRuntimeID(ctx, ref, func(runtimeID string) error {
+		limited := io.LimitReader(body, s.limits.FileMaxBytes+1)
+		buf, err := io.ReadAll(limited)
+		if err != nil {
+			return fmt.Errorf("files: read body: %w", err)
+		}
+		if int64(len(buf)) > s.limits.FileMaxBytes {
+			return fmt.Errorf("%w: file exceeds %d bytes", ErrTooLarge, s.limits.FileMaxBytes)
+		}
+
 		targetInfo, err := s.rt.StatPath(ctx, runtimeID, cleaned)
 		if err == nil {
 			if targetInfo.IsDir {

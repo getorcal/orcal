@@ -150,3 +150,29 @@ func TestWriteRejectsRelativePath(t *testing.T) {
 		t.Errorf("Write() error = %v, want ErrInvalidPath", err)
 	}
 }
+
+type countingReader struct {
+	r     io.Reader
+	bytes int
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.bytes += n
+	return n, err
+}
+
+func TestWriteToNonexistentSandboxDoesNotConsumeBody(t *testing.T) {
+	svc, _, access := newService(t)
+	boom := errors.New("no such sandbox")
+	access.err = boom
+
+	body := &countingReader{r: strings.NewReader(strings.Repeat("x", 1<<20))}
+	err := svc.Write(context.Background(), "ghost", "/app/x.txt", body)
+	if !errors.Is(err, boom) {
+		t.Fatalf("Write() error = %v, want the lookup error", err)
+	}
+	if body.bytes != 0 {
+		t.Errorf("bytes read from body = %d, want 0; a write to a nonexistent sandbox must not buffer the request body", body.bytes)
+	}
+}
