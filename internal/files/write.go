@@ -31,6 +31,18 @@ func (s *Service) Write(ctx context.Context, ref, p string, body io.Reader) erro
 	}
 
 	return s.sandboxes.WithLockedRuntimeID(ctx, ref, func(runtimeID string) error {
+		targetInfo, err := s.rt.StatPath(ctx, runtimeID, cleaned)
+		if err == nil {
+			if targetInfo.IsDir {
+				return fmt.Errorf("%w: %s is a directory", ErrNotRegular, cleaned)
+			}
+			if !targetInfo.Mode.IsRegular() {
+				return fmt.Errorf("%w: %s", ErrNotRegular, cleaned)
+			}
+		} else if !errors.Is(err, runtime.ErrPathNotFound) {
+			return err
+		}
+
 		anchor, missing, err := s.deepestExistingAncestor(ctx, runtimeID, cleaned)
 		if err != nil {
 			return err

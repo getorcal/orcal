@@ -120,6 +120,29 @@ func TestWriteRejectsBodyOverLimit(t *testing.T) {
 	}
 }
 
+func TestWriteRefusesToClobberADirectory(t *testing.T) {
+	svc, f, access := newService(t)
+	ctx := context.Background()
+	f.SeedDir(access.RuntimeID(), "/app/worktree", 0o755)
+	f.Seed(access.RuntimeID(), "/app/worktree/important.go", 0o644, []byte("valuable"))
+
+	err := svc.Write(ctx, "my-agent", "/app/worktree", strings.NewReader("clobber"))
+	if !errors.Is(err, files.ErrNotRegular) {
+		t.Fatalf("Write() onto a directory = %v, want ErrNotRegular", err)
+	}
+
+	info, err := svc.Stat(ctx, "my-agent", "/app/worktree")
+	if err != nil {
+		t.Fatalf("Stat() after refused write = %v", err)
+	}
+	if !info.IsDir {
+		t.Error("/app/worktree is no longer a directory; a refused write must change nothing")
+	}
+	if _, err := svc.Stat(ctx, "my-agent", "/app/worktree/important.go"); err != nil {
+		t.Errorf("child was destroyed: %v", err)
+	}
+}
+
 func TestWriteRejectsRelativePath(t *testing.T) {
 	svc, _, _ := newService(t)
 
