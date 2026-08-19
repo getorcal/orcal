@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -81,6 +82,38 @@ func TestRenderTokenListShowsUnknownAndRevoked(t *testing.T) {
 	if !strings.Contains(body, "(revoked)") {
 		t.Fatal("a revoked token must be marked")
 	}
+}
+
+func TestTokenRevokeRendersHumanAndJSON(t *testing.T) {
+	testID := "tok-xyz"
+
+	t.Run("human mode emits id alone", func(t *testing.T) {
+		var out bytes.Buffer
+		if got := out.String(); got != "" {
+			t.Fatalf("expected empty buffer, got %q", got)
+		}
+		_, err := fmt.Fprintln(&out, testID)
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if got := out.String(); got != testID+"\n" {
+			t.Fatalf("human mode must print id alone with newline, got %q", got)
+		}
+	})
+
+	t.Run("json mode emits document", func(t *testing.T) {
+		var out bytes.Buffer
+		if err := renderJSONLine(&out, map[string]any{"id": testID}); err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		var decoded map[string]any
+		if err := json.Unmarshal(out.Bytes(), &decoded); err != nil {
+			t.Fatalf("stdout must be valid JSON: %v", err)
+		}
+		if decoded["id"] != testID {
+			t.Fatalf("json must carry id, got %v", decoded)
+		}
+	})
 }
 
 func sampleCreatedToken() *apigen.CreatedToken {

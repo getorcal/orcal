@@ -95,6 +95,9 @@ func (a *app) tokenRevokeCmd() *cobra.Command {
 			if err := a.client.RevokeToken(cmd.Context(), args[0]); err != nil {
 				return err
 			}
+			if a.settings.Output == "json" {
+				return renderJSONLine(a.stdout, map[string]any{"id": args[0]})
+			}
 			_, writeErr := fmt.Fprintln(a.stdout, args[0])
 			return writeErr
 		}),
