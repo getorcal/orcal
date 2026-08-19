@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"context"
+	"io"
+	"io/fs"
 	"time"
 )
 
@@ -59,6 +61,15 @@ type ExecStatus struct {
 	ExitCode *int
 }
 
+type FileInfo struct {
+	Name       string
+	LinkTarget string
+	Size       int64
+	Mode       fs.FileMode
+	ModTime    time.Time
+	IsDir      bool
+}
+
 type Session interface {
 	ID() string
 	Recv() (Frame, error)
@@ -77,4 +88,7 @@ type Runtime interface {
 	Snapshot(ctx context.Context, runtimeID string) (SnapshotInfo, error)
 	DeleteSnapshot(ctx context.Context, ref string) error
 	Unpause(ctx context.Context, runtimeID string) error
+	StatPath(ctx context.Context, runtimeID, path string) (FileInfo, error)
+	ReadArchive(ctx context.Context, runtimeID, path string) (io.ReadCloser, error)
+	WriteArchive(ctx context.Context, runtimeID, destDir string, tar io.Reader) error
 }

@@ -20,6 +20,7 @@ type Step struct {
 type container struct {
 	spec  runtime.CreateSpec
 	state runtime.ContainerState
+	files map[string]*fileNode
 }
 
 type Fake struct {
