@@ -84,6 +84,27 @@ jobs:
           cd dist
           sha256sum *.tar.gz > checksums.txt
           cat checksums.txt
+      - name: Release notes from CHANGELOG.md
+        # The release body is hand-written product copy, not commit subjects. Every failure
+        # here is a missing edit to CHANGELOG.md, and failing is better than publishing a
+        # release whose notes silently say nothing.
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if ! grep -q "^## ${version}$" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## ${version}' heading for tag ${GITHUB_REF_NAME}"
+            exit 1
+          fi
+          markers=$(grep -c '<!-- release:start -->' CHANGELOG.md || true)
+          if [ "$markers" != "1" ]; then
+            echo "::error::expected exactly one <!-- release:start --> marker, found ${markers}; remove them from the previous entry"
+            exit 1
+          fi
+          awk '/<!-- release:start -->/{flag=1;next} /<!-- release:end -->/{flag=0} flag' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "::error::the marked block in CHANGELOG.md is empty"
+            exit 1
+          fi
+          cat notes.md
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -91,7 +112,7 @@ jobs:
           gh release create "${GITHUB_REF_NAME}" \
             --repo "${GITHUB_REPOSITORY}" \
             --title "${GITHUB_REF_NAME}" \
-            --generate-notes \
+            --notes-file notes.md \
             dist/*.tar.gz dist/checksums.txt
 
   image:

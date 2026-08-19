@@ -233,13 +233,17 @@ A test registers cleanup with `t.Cleanup` at the moment it creates a resource, n
 
 ## Keeping Docs Honest
 
-User-facing changes update the API contract in `spec/openapi.yaml` first, then the command help text in `cmd/orcal`, then this file when a convention, trap, or workflow rule moved.
+User-facing changes update the API contract in `spec/openapi.yaml` first, then the command help text in `cmd/orcal`, then the `## Unreleased` section of `CHANGELOG.md`, then this file when a convention, trap, or workflow rule moved.
+
+`CHANGELOG.md` is public product copy, not a work log. Describe what a user can now observe, and leave refactors, CI changes, test work, commit hashes, and contributor names out of it. Work with no user-visible outcome needs no entry at all.
 
 Never describe planned behavior as though it already ships. Leave it out, or say outright that it does not exist yet.
 
 ## Releases
 
 A pushed `v*` tag triggers `.github/workflows/release.yml`, which verifies, cross-compiles `linux/amd64`, `linux/arm64`, `darwin/amd64`, and `darwin/arm64`, publishes a GitHub Release with checksums, and pushes a multi-arch image to `ghcr.io/getorcal/orcal` with a signed build-provenance attestation.
+
+The release body comes from `CHANGELOG.md`, not from commit subjects. Before tagging, rename `## Unreleased` to the version, wrap that entry in `<!-- release:start -->` and `<!-- release:end -->`, and strip those markers from the previous entry. The workflow fails when the tag has no matching heading, when the marker count is not exactly one, or when the marked block is empty.
 
 Every target cross-compiles without a C toolchain because `modernc.org/sqlite` is pure Go. Keep it that way — a cgo-requiring dependency would cost the entire release matrix.
 
