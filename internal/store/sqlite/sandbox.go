@@ -75,6 +75,9 @@ func (r *sandboxRepo) List(ctx context.Context, f sandbox.Filter) ([]*sandbox.Sa
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
+			// json_each rather than json_extract: a label key containing a dot or bracket
+			// would be parsed as a path expression by json_extract("$."+key) and silently
+			// fail to match. Keys are sorted first so the generated SQL is deterministic.
 			query += ` AND EXISTS (SELECT 1 FROM json_each(labels) WHERE json_each.key = ? AND json_each.value = ?)`
 			args = append(args, k, f.Labels[k])
 		}

@@ -117,6 +117,8 @@ func (d *Docker) Inspect(ctx context.Context, id string) (runtime.Status, error)
 	return status, nil
 }
 
+// Docker reports State.Running == true for a paused container, so paused must be
+// checked first or a frozen sandbox reads as healthy while every exec against it hangs.
 func containerStateFrom(running, paused bool) runtime.ContainerState {
 	switch {
 	case running && paused:
@@ -179,11 +181,15 @@ func (d *Docker) Snapshot(ctx context.Context, id string) (runtime.SnapshotInfo,
 		return runtime.SnapshotInfo{}, translate(err)
 	}
 
+	// Pausing a stopped container errors, and snapshotting a stopped sandbox is legitimate.
 	wasRunning := info.State != nil && info.State.Running && !info.State.Paused
 	if wasRunning {
 		if err := d.cli.ContainerPause(ctx, id); err != nil {
 			return runtime.SnapshotInfo{}, translate(err)
 		}
+		// WithoutCancel is load-bearing: if the caller's context was cancelled mid-commit,
+		// unpausing on that same context would fail and strand the container paused forever.
+		// The unpause is also unconditional — a failed commit must not leave the sandbox frozen.
 		defer func() {
 			d.cli.ContainerUnpause(context.WithoutCancel(ctx), id)
 		}()
@@ -214,6 +220,7 @@ func (d *Docker) Unpause(ctx context.Context, id string) error {
 	if errdefs.IsNotFound(err) {
 		return fmt.Errorf("%w: container %s", runtime.ErrNotFound, id)
 	}
+	// Docker returns a conflict when the container is not paused — the state the caller wanted.
 	if errdefs.IsConflict(err) {
 		return nil
 	}

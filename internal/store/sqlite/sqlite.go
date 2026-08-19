@@ -16,6 +16,9 @@ import (
 //go:embed migrations/*.sql
 var migrationFS embed.FS
 
+// Fixed-width fractional seconds, unlike time.RFC3339Nano which trims trailing zeros.
+// Timestamps are stored as TEXT and compared lexicographically, so a variable-width
+// format sorts wrong — "…:05.9Z" would order after "…:05.10Z".
 const timeFormat = "2006-01-02T15:04:05.000000000Z07:00"
 
 type Store struct {
@@ -27,6 +30,8 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: open: %w", err)
 	}
+	// SQLite permits one writer; serialising every connection avoids SQLITE_BUSY under
+	// concurrent sandbox operations at the cost of throughput this daemon does not need.
 	db.SetMaxOpenConns(1)
 	s := &Store{db: db}
 	if err := s.migrate(context.Background()); err != nil {

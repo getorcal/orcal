@@ -8,6 +8,8 @@ import (
 	"github.com/getorcal/orcal/internal/apigen"
 )
 
+// Every ref reaching a URL path goes through url.PathEscape. Refs are user-supplied names as
+// well as IDs, and an unescaped "/" or "?" silently reshapes the request into a different route.
 type CreateSnapshotParams struct {
 	Name string `json:"name,omitempty"`
 }

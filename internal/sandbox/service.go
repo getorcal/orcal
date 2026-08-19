@@ -22,6 +22,10 @@ type CreateOptions struct {
 	Resources Resources
 }
 
+// SnapshotLookup is the mirror of snapshot.SandboxAccess: each package declares the slice of
+// the other it consumes, so the dependency runs one way only (sandbox imports snapshot).
+// It is wired after construction via SetSnapshots because the two services are mutually
+// dependent; Fork and Restore return ErrSnapshotRequired if that wiring was skipped.
 type SnapshotLookup interface {
 	Resolve(ctx context.Context, ref string) (string, string, error)
 }
@@ -258,6 +262,9 @@ func (s *Service) RuntimeID(ctx context.Context, sandboxID string) (string, erro
 	return sb.RuntimeID, nil
 }
 
+// WithSnapshotSource runs fn while holding the per-sandbox lock, so the Docker commit and the
+// snapshot row are written atomically with respect to any other mutation of this sandbox.
+// A plain getter would let a Destroy land between reading the runtime ID and committing it.
 func (s *Service) WithSnapshotSource(ctx context.Context, ref string, fn func(snapshot.SandboxSource) error) error {
 	sb, err := s.Get(ctx, ref)
 	if err != nil {
@@ -298,6 +305,9 @@ func (s *Service) Fork(ctx context.Context, snapshotRef string, opts CreateOptio
 		return nil, err
 	}
 
+	// Create released the per-sandbox lock before returning, so `created` is already stale.
+	// repo.Update rewrites every column, meaning a Destroy that landed in that window would be
+	// silently reverted to state=running with a dead runtime_id. Re-read under the lock instead.
 	unlock := s.locks.lock(created.ID)
 	defer unlock()
 
@@ -380,6 +390,9 @@ func (s *Service) Restore(ctx context.Context, sandboxRef, snapshotRef string) (
 	return sb, nil
 }
 
+// UnpausePaused recovers containers stranded by a daemon that died between pause and commit.
+// Nothing else can unpause them, and until they are the sandbox reads as running while every
+// exec against it hangs.
 func (s *Service) UnpausePaused(ctx context.Context) (int, error) {
 	all, err := s.repo.List(ctx, Filter{States: []State{StateRunning}, Limit: 0})
 	if err != nil {
@@ -391,6 +404,8 @@ func (s *Service) UnpausePaused(ctx context.Context) (int, error) {
 		if sb.RuntimeID == "" {
 			continue
 		}
+		// Boot reconciliation must not abort on one unreachable container, so per-sandbox
+		// failures are skipped rather than returned; the count reports what actually recovered.
 		status, err := s.rt.Inspect(ctx, sb.RuntimeID)
 		if err != nil || status.State != runtime.ContainerPaused {
 			continue

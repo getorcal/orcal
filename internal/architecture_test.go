@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+// .Imports covers non-test files only; TestImports and XTestImports are deliberately excluded
+// so build-tagged integration tests under test/integration may reach for the Docker client.
 func TestOnlyTheDockerAdapterImportsDocker(t *testing.T) {
 	out, err := exec.Command("go", "list", "-f", "{{.ImportPath}} {{join .Imports \" \"}}", "../...").CombinedOutput()
 	if err != nil {

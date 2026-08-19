@@ -21,6 +21,9 @@ func (s *Server) registerSnapshotRoutes(mux *http.ServeMux) {
 }
 
 func (s *Server) handleCreateSnapshot(w http.ResponseWriter, r *http.Request) {
+	// The body is optional, so EOF is tolerated — but it must still be decoded rather than
+	// gated on ContentLength, which is -1 for chunked and non-seekable bodies (including
+	// Go's own http.Client). Gating on length silently dropped the caller's snapshot name.
 	var req apigen.CreateSnapshotRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
 		s.writeError(w, r, fmt.Errorf("%w: malformed JSON body", ErrInvalidRequest))

@@ -184,6 +184,9 @@ func (f *Fake) Snapshot(ctx context.Context, id string) (runtime.SnapshotInfo, e
 		return runtime.SnapshotInfo{}, fmt.Errorf("%w: container %s", runtime.ErrNotFound, id)
 	}
 
+	// The fake pauses and restores exactly as the Docker adapter does, including on the failure
+	// path. A fake more forgiving than the real runtime would make every test above it prove
+	// less than it appears to.
 	restore := c.state
 	if c.state == runtime.ContainerRunning {
 		c.state = runtime.ContainerPaused

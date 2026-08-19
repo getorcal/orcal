@@ -17,6 +17,9 @@ const (
 	LogGap    LogStream = 0x03
 )
 
+// Wire format is an append-only sequence of [1 byte stream][4 bytes big-endian length][payload].
+// Offsets into this file are the resume cursor handed to clients, so frames must never be
+// rewritten or reordered — only appended.
 const (
 	MaxFramePayload = 64 * 1024
 	headerSize      = 5
@@ -64,6 +67,8 @@ func NewLogWriter(path string, maxBytes int64) (*LogWriter, error) {
 	return w, nil
 }
 
+// A daemon killed mid-Append leaves a partial frame that would desynchronise every subsequent
+// read. Walk the frames on open and truncate back to the last complete boundary.
 func (w *LogWriter) repairTornTail() error {
 	path := w.f.Name()
 	rf, err := os.Open(path)

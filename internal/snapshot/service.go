@@ -17,6 +17,9 @@ type SandboxSource struct {
 	ParentSnapshotID *string
 }
 
+// SandboxAccess is declared here, in the consuming package, rather than importing
+// internal/sandbox — which imports this package for Fork and Restore. Keeping this interface
+// to strings and a plain struct is what stops the two from forming an import cycle.
 type SandboxAccess interface {
 	WithSnapshotSource(ctx context.Context, ref string, fn func(SandboxSource) error) error
 }
@@ -68,6 +71,8 @@ func (s *Service) Create(ctx context.Context, opts CreateOptions) (*Snapshot, er
 			SizeBytes:  info.SizeBytes,
 			CreatedAt:  s.now(),
 		}
+		// The image exists before the row does, so a failed insert would orphan it on the host
+		// with nothing pointing at it. Roll the image back and report both failures.
 		if err := s.repo.Create(ctx, snap); err != nil {
 			return errors.Join(err, s.rt.DeleteSnapshot(ctx, info.Ref))
 		}
@@ -80,6 +85,8 @@ func (s *Service) Create(ctx context.Context, opts CreateOptions) (*Snapshot, er
 	return created, nil
 }
 
+// Get accepts an ID or a name. The two namespaces cannot collide because ValidateName rejects
+// UUID-shaped names at creation time, so a parseable ref is always an ID.
 func (s *Service) Get(ctx context.Context, ref string) (*Snapshot, error) {
 	if _, err := uuid.Parse(ref); err == nil {
 		return s.repo.Get(ctx, ref)
@@ -113,6 +120,9 @@ func (s *Service) Delete(ctx context.Context, ref string) error {
 		return fmt.Errorf("%w: %d descend from it", ErrHasChildren, children)
 	}
 
+	// Image before row: if the runtime refuses (Docker returns a conflict while a container
+	// still references the image) the row must survive, or the image is orphaned. An image
+	// already removed out of band is tolerated so it cannot block cleanup forever.
 	if err := s.rt.DeleteSnapshot(ctx, snap.RuntimeRef); err != nil {
 		if !errors.Is(err, runtime.ErrNotFound) {
 			return err

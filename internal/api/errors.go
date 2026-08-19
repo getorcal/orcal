@@ -30,6 +30,9 @@ const (
 	CodeInternalError      ErrorCode = apigen.InternalError
 )
 
+// Order matters. Snapshot sentinels are matched before their sandbox equivalents because a
+// fork or restore wraps both, and the first arm wins — moving these below sandbox.ErrNotFound
+// would report a missing snapshot as a missing sandbox.
 func classify(err error) (int, ErrorCode) {
 	switch {
 	case errors.Is(err, snapshot.ErrNotFound):

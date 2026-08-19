@@ -91,6 +91,8 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// Must run before exec reconciliation: a container left paused by a crashed daemon would
+	// otherwise be treated as healthy and its execs polled forever.
 	if n, err := sandboxes.UnpausePaused(ctx); err != nil {
 		logger.Warn("paused-container reconciliation incomplete", slog.String("error", err.Error()))
 	} else if n > 0 {
@@ -99,6 +101,10 @@ func run() error {
 	if err := execs.Reconcile(ctx); err != nil {
 		logger.Warn("exec reconciliation incomplete", slog.String("error", err.Error()))
 	}
+	// The two services depend on each other: snapshot.Service needs the sandbox lock via
+	// WithSnapshotSource, sandbox.Service needs Resolve to fork and restore. Neither needs the
+	// other at construction, so the cycle is broken by wiring the second half after the fact.
+	// Leaving SetSnapshots uncalled compiles fine and nil-panics on the first fork at runtime.
 	snapshots := snapshot.NewService(store.Snapshots(), sandboxes, rt)
 	sandboxes.SetSnapshots(snapshots)
 

@@ -144,6 +144,8 @@ func (s *Service) supervise(execID string, session runtime.Session) {
 	defer s.wg.Done()
 	defer session.Close()
 
+	// Deliberately not the request context: the supervisor outlives the HTTP call that started
+	// it, and cancelling on client disconnect would abandon the exec with no recorded exit code.
 	ctx := context.Background()
 
 	writer, err := NewLogWriter(s.LogPath(execID), s.maxBytes)
