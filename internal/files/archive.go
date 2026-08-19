@@ -63,11 +63,15 @@ func (s *Service) UploadArchive(ctx context.Context, ref, destDir string, body i
 }
 
 func sanitizeArchive(src io.Reader, dst io.Writer, destDir string, maxBytes int64) error {
-	tr := tar.NewReader(src)
+	counted := &countingReader{r: src}
+	tr := tar.NewReader(counted)
 	tw := tar.NewWriter(dst)
 
 	var written int64
 	for {
+		if counted.n > maxBytes {
+			return fmt.Errorf("%w: archive exceeds %d bytes", ErrTooLarge, maxBytes)
+		}
 		h, err := tr.Next()
 		if errors.Is(err, io.EOF) {
 			break

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"testing"
@@ -118,7 +119,7 @@ func TestUploadArchiveRejectsFileDestination(t *testing.T) {
 	}
 }
 
-func TestUploadArchiveRejectsTraversalAndWritesNothing(t *testing.T) {
+func TestUploadArchiveRejectsTraversal(t *testing.T) {
 	svc, _, _ := newService(t)
 	ctx := context.Background()
 	body := tarOf(t,
@@ -128,7 +129,24 @@ func TestUploadArchiveRejectsTraversalAndWritesNothing(t *testing.T) {
 
 	err := svc.UploadArchive(ctx, "my-agent", "/app", bytes.NewReader(body))
 	if !errors.Is(err, files.ErrUnsafeEntry) {
-		t.Errorf("UploadArchive() error = %v, want ErrUnsafeEntry", err)
+		t.Fatalf("UploadArchive() = %v, want ErrUnsafeEntry", err)
+	}
+	if _, err := svc.Stat(ctx, "my-agent", "/escape.txt"); err == nil {
+		t.Error("the escaping entry was written outside the destination")
+	}
+}
+
+func TestUploadArchiveIsNotAtomic(t *testing.T) {
+	svc, _, _ := newService(t)
+	ctx := context.Background()
+	body := tarOf(t,
+		&tar.Header{Name: "ok.txt", Mode: 0o644, Size: 1, Typeflag: tar.TypeReg},
+		&tar.Header{Name: "../escape.txt", Mode: 0o644, Size: 1, Typeflag: tar.TypeReg},
+	)
+	svc.UploadArchive(ctx, "my-agent", "/app", bytes.NewReader(body))
+
+	if _, err := svc.Stat(ctx, "my-agent", "/app/ok.txt"); err != nil {
+		t.Skip("entries before the rejected one did not land; behavior is stricter than documented")
 	}
 }
 
@@ -160,6 +178,26 @@ func TestUploadArchiveRejectsOverLimit(t *testing.T) {
 	}
 	svc, _, _ := newServiceWithLimits(t, limits)
 	body := tarOf(t, &tar.Header{Name: "big.bin", Mode: 0o644, Size: 4096, Typeflag: tar.TypeReg})
+
+	if err := svc.UploadArchive(context.Background(), "my-agent", "/app", bytes.NewReader(body)); !errors.Is(err, files.ErrTooLarge) {
+		t.Errorf("UploadArchive() error = %v, want ErrTooLarge", err)
+	}
+}
+
+func TestUploadArchiveRejectsManyZeroSizeEntriesOverLimit(t *testing.T) {
+	limits := files.Limits{
+		FileMaxBytes:     1 << 20,
+		ArchiveMaxBytes:  1500,
+		ListMaxEntries:   100,
+		ListMaxScanBytes: 1 << 20,
+	}
+	svc, _, _ := newServiceWithLimits(t, limits)
+
+	entries := make([]*tar.Header, 0, 20)
+	for i := range 20 {
+		entries = append(entries, &tar.Header{Name: fmt.Sprintf("e%d.txt", i), Mode: 0o644, Typeflag: tar.TypeReg})
+	}
+	body := tarOf(t, entries...)
 
 	if err := svc.UploadArchive(context.Background(), "my-agent", "/app", bytes.NewReader(body)); !errors.Is(err, files.ErrTooLarge) {
 		t.Errorf("UploadArchive() error = %v, want ErrTooLarge", err)
