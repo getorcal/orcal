@@ -41,7 +41,11 @@ func SanitizeEntry(h *tar.Header, destDir string) error {
 		if strings.HasPrefix(h.Linkname, "/") {
 			return fmt.Errorf("%w: %s targets an absolute path", ErrUnsafeEntry, h.Name)
 		}
-		resolved := path.Clean(path.Join(path.Dir(rel), h.Linkname))
+		base := "."
+		if h.Typeflag == tar.TypeSymlink {
+			base = path.Dir(rel)
+		}
+		resolved := path.Clean(path.Join(base, h.Linkname))
 		if resolved == ".." || strings.HasPrefix(resolved, "../") {
 			return fmt.Errorf("%w: %s targets %s outside the destination", ErrUnsafeEntry, h.Name, h.Linkname)
 		}
@@ -50,5 +54,10 @@ func SanitizeEntry(h *tar.Header, destDir string) error {
 	h.Mode = int64(fs.FileMode(h.Mode) & ^(fs.ModeSetuid | fs.ModeSetgid))
 	h.Uid, h.Gid = 0, 0
 	h.Uname, h.Gname = "", ""
+	if h.Typeflag == tar.TypeDir {
+		h.Name = rel + "/"
+	} else {
+		h.Name = rel
+	}
 	return nil
 }

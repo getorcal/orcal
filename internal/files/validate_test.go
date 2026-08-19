@@ -78,6 +78,45 @@ func TestSanitizeEntryAcceptsInTreeSymlink(t *testing.T) {
 	}
 }
 
+func TestSanitizeEntryRejectsNestedHardlinkEscape(t *testing.T) {
+	h := &tar.Header{Name: "a/hard", Typeflag: tar.TypeLink, Linkname: "../etc/passwd"}
+	if err := SanitizeEntry(h, "/app"); !errors.Is(err, ErrUnsafeEntry) {
+		t.Errorf("SanitizeEntry(nested hardlink escaping) = %v, want ErrUnsafeEntry", err)
+	}
+}
+
+func TestSanitizeEntryAcceptsRootRelativeHardlink(t *testing.T) {
+	h := &tar.Header{Name: "a/hard", Typeflag: tar.TypeLink, Linkname: "a/main.go"}
+	if err := SanitizeEntry(h, "/app"); err != nil {
+		t.Errorf("SanitizeEntry(in-archive hardlink) = %v, want nil", err)
+	}
+}
+
+func TestSanitizeEntryAcceptsNestedSymlinkAcrossDirectories(t *testing.T) {
+	h := &tar.Header{Name: "a/b/c/link", Typeflag: tar.TypeSymlink, Linkname: "../../d"}
+	if err := SanitizeEntry(h, "/app"); err != nil {
+		t.Errorf("SanitizeEntry(in-tree nested symlink) = %v, want nil", err)
+	}
+}
+
+func TestSanitizeEntryNormalizesName(t *testing.T) {
+	h := &tar.Header{Name: "./a//b/../c.txt", Typeflag: tar.TypeReg, Mode: 0o644}
+	if err := SanitizeEntry(h, "/app"); err != nil {
+		t.Fatalf("SanitizeEntry() error = %v", err)
+	}
+	if h.Name != "a/c.txt" {
+		t.Errorf("Name = %q, want %q", h.Name, "a/c.txt")
+	}
+
+	dir := &tar.Header{Name: "sub/", Typeflag: tar.TypeDir, Mode: 0o755}
+	if err := SanitizeEntry(dir, "/app"); err != nil {
+		t.Fatalf("SanitizeEntry() error = %v", err)
+	}
+	if dir.Name != "sub/" {
+		t.Errorf("Name = %q, want %q", dir.Name, "sub/")
+	}
+}
+
 func TestSanitizeEntryRejectsSpecialFileTypes(t *testing.T) {
 	for _, tf := range []byte{tar.TypeChar, tar.TypeBlock, tar.TypeFifo} {
 		h := &tar.Header{Name: "special", Typeflag: tf}
