@@ -9,6 +9,9 @@ permissions:
 
 env:
   IMAGE: ghcr.io/${{ github.repository }}
+  # Newest patch of the declared series, so shipped binaries carry current stdlib fixes.
+  # The go.mod directive is the consumer floor, not what we build releases with.
+  GO_VERSION: "1.25.x"
 
 jobs:
   verify:
@@ -17,7 +20,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ env.GO_VERSION }}
           cache: true
       - run: go vet ./...
       - run: go test ./... -count=1
@@ -37,7 +40,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ env.GO_VERSION }}
           cache: true
       - name: Build
         env:

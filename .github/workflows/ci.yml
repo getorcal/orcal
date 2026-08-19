@@ -13,7 +13,11 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Must match the golangci-lint used locally; the config in .golangci.yml is v2 schema.
+  # Newest patch of the 1.25 series, matching what golang:1.25-alpine resolves to for releases.
+  # Deliberately NOT go-version-file: go.mod - that installs exactly 1.25.0, the floor we
+  # promise consumers, which is many security patches behind.
+  GO_VERSION: "1.25.x"
+  # Must match the golangci-lint used locally; .golangci.yml uses the v2 schema.
   GOLANGCI_LINT_VERSION: v2.12.2
 
 jobs:
@@ -23,7 +27,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ env.GO_VERSION }}
           cache: true
       - name: Install golangci-lint
         # Pinned and module-independent, mirroring how oapi-codegen is pinned in generate.go.
@@ -42,13 +46,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ env.GO_VERSION }}
           cache: true
       - name: Generated code is current
         run: make verify-generate
       - name: Module graph is unchanged by building
-        # Deliberately never runs `go mod tidy`: four dependencies hold the go directive floor
-        # and tidy silently raises it. This only asserts nothing drifted.
+        # Deliberately never runs `go mod tidy`: dependencies hold the go directive floor and
+        # tidy silently raises it. This only asserts nothing drifted.
         run: |
           go mod verify
           go build ./...
@@ -58,13 +62,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        include:
+          # The floor go.mod promises. If this fails, the declared minimum is a lie.
+          - { os: ubuntu-latest, go: "1.25.0" }
+          - { os: ubuntu-latest, go: "1.25.x" }
+          - { os: macos-latest, go: "1.25.x" }
     runs-on: ${{ matrix.os }}
+    name: test (${{ matrix.os }}, go${{ matrix.go }})
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ matrix.go }}
           cache: true
       - run: go vet ./...
       - run: go test ./... -count=1
@@ -77,7 +86,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ env.GO_VERSION }}
           cache: true
       - run: docker version
       - name: Docker integration suite
@@ -94,12 +103,14 @@ jobs:
             echo "::error::no integration test reported a pass"
             exit 1
           fi
-      - name: No leaked containers or networks
+      - name: No leaked containers
         if: always()
         run: |
           leaked=$(docker ps -aq --filter "label=orcal.managed" | wc -l | tr -d ' ')
           if [ "$leaked" != "0" ]; then
-            echo "::error::$leaked orcal container(s) left behind"; docker ps -a --filter "label=orcal.managed"; exit 1
+            echo "::error::$leaked orcal container(s) left behind"
+            docker ps -a --filter "label=orcal.managed"
+            exit 1
           fi
 
   image:
@@ -122,7 +133,6 @@ jobs:
             set -e
             test -x /usr/local/bin/orcald
             test -x /usr/local/bin/orcal
-            /usr/local/bin/orcald --help >/dev/null 2>&1 || true
           '
 
   vuln:
@@ -131,10 +141,35 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ env.GO_VERSION }}
           cache: true
       - name: govulncheck
-        # Intentionally unpinned: a vulnerability scanner is only useful at its newest.
+        # Unpinned on purpose: a vulnerability scanner is only useful at its newest.
+        # Only findings reachable from orcal's own code gate the build; imported-but-uncalled
+        # ones do not. Accepted findings live in .github/vuln-allowlist.txt with reasons.
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./...
+          govulncheck -format json ./... > vuln.json || true
+
+          jq -r 'select(has("finding")) | .finding | select((.trace // []) | length > 0) | select(.trace[0].function != null) | .osv' vuln.json | sort -u > called.txt
+          jq -r 'select(has("finding")) | .finding | select((.trace // []) | length > 0) | select(.trace[0].function != null) | select((.fixed_version // "") != "") | .osv' vuln.json | sort -u > fixable.txt
+          grep -vE '^[[:space:]]*(#|$)' .github/vuln-allowlist.txt | awk '{print $1}' | sort -u > accepted.txt
+
+          comm -23 called.txt accepted.txt > unaccepted.txt
+          comm -12 fixable.txt accepted.txt > stale.txt
+
+          if [ -s stale.txt ]; then
+            echo "::error::accepted vulnerabilities now have fixes - upgrade and drop them from .github/vuln-allowlist.txt:"
+            sed 's#^#  https://pkg.go.dev/vuln/#' stale.txt
+            exit 1
+          fi
+          if [ -s unaccepted.txt ]; then
+            echo "::error::vulnerabilities reachable from orcal code:"
+            sed 's#^#  https://pkg.go.dev/vuln/#' unaccepted.txt
+            echo "Upgrade to fix, or accept with a written reason in .github/vuln-allowlist.txt"
+            exit 1
+          fi
+          echo "No unaccepted reachable vulnerabilities."
+          if [ -s accepted.txt ]; then
+            echo "Consciously accepted:"; sed 's#^#  #' accepted.txt
+          fi

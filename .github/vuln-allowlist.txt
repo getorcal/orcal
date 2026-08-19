@@ -1,0 +1,9 @@
+# Vulnerabilities that govulncheck reports as reachable from orcal's own code and that we
+# have consciously accepted. One per line: <OSV id> <reason>.
+#
+# This list expires itself. CI fails if an entry here ever gains a fixed version, so an
+# accepted risk cannot quietly become an ignored, fixable one. CI also fails on any reachable
+# vulnerability that is not listed here.
+
+GO-2026-4887  Moby daemon AuthZ plugin bypass on oversized request bodies. orcal vendors github.com/docker/docker for its client package only; it talks to a daemon over a socket and never runs one, registers an AuthZ plugin, or reaches this code path. Reported as reachable because the module ships daemon and client together and package init is in the trace. No module release fixes it (Fixed in: N/A) - the fix ships in the daemon, which operators upgrade independently.
+GO-2026-4883  Moby daemon off-by-one in plugin privilege validation. Same reasoning: daemon-side plugin handling that a client-only import never executes, and no module release fixes it.
