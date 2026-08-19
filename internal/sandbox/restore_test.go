@@ -172,6 +172,24 @@ func TestRestoreReplacesTheContainerAndKeepsIdentity(t *testing.T) {
 	}
 }
 
+func TestRestorePreservesTheNetworkMode(t *testing.T) {
+	svc, f := newService(t)
+	svc.SetSnapshots(stubSnapshots{ref: "sha256:snap", id: "sn-1"})
+	ctx := context.Background()
+	svc.Create(ctx, sandbox.CreateOptions{Name: "my-agent", Image: "alpine:3.20", Network: sandbox.NetworkNone})
+
+	restored, err := svc.Restore(ctx, "my-agent", "working-v1")
+	if err != nil {
+		t.Fatalf("Restore() error = %v", err)
+	}
+	if restored.Network != sandbox.NetworkNone {
+		t.Errorf("Network = %q, want none", restored.Network)
+	}
+	if got := f.LastCreateSpec().NetworkName; got != "orcal-isolated" {
+		t.Errorf("spec.NetworkName = %q, want orcal-isolated - a restored none sandbox must not regain internet access", got)
+	}
+}
+
 func TestRestoreLeavesTheSandboxErroredWhenTheRuntimeFails(t *testing.T) {
 	svc, f := newService(t)
 	svc.SetSnapshots(stubSnapshots{ref: "sha256:snap", id: "sn-1"})
