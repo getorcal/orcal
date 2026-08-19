@@ -1,8 +1,11 @@
 package api
 
 import (
+	"fmt"
+
 	"github.com/getorcal/orcal/internal/apigen"
 	"github.com/getorcal/orcal/internal/exec"
+	"github.com/getorcal/orcal/internal/runtime"
 	"github.com/getorcal/orcal/internal/sandbox"
 	"github.com/getorcal/orcal/internal/snapshot"
 )
@@ -48,6 +51,20 @@ func toAPISnapshot(s *snapshot.Snapshot) apigen.Snapshot {
 	}
 	if s.Name != "" {
 		out.Name = ptr(s.Name)
+	}
+	return out
+}
+
+func toAPIFileInfo(info runtime.FileInfo) apigen.FileInfo {
+	out := apigen.FileInfo{
+		Name:  info.Name,
+		Size:  info.Size,
+		Mode:  fmt.Sprintf("%04o", info.Mode.Perm()),
+		Mtime: info.ModTime,
+		IsDir: info.IsDir,
+	}
+	if info.LinkTarget != "" {
+		out.LinkTarget = ptr(info.LinkTarget)
 	}
 	return out
 }

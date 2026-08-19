@@ -8,6 +8,7 @@ import (
 
 	"github.com/getorcal/orcal/internal/apigen"
 	"github.com/getorcal/orcal/internal/exec"
+	"github.com/getorcal/orcal/internal/files"
 	"github.com/getorcal/orcal/internal/runtime"
 	"github.com/getorcal/orcal/internal/sandbox"
 	"github.com/getorcal/orcal/internal/snapshot"
@@ -23,6 +24,7 @@ const (
 	CodeSandboxNotFound    ErrorCode = apigen.SandboxNotFound
 	CodeExecNotFound       ErrorCode = apigen.ExecNotFound
 	CodeSnapshotNotFound   ErrorCode = apigen.SnapshotNotFound
+	CodePathNotFound       ErrorCode = apigen.PathNotFound
 	CodeNameTaken          ErrorCode = apigen.NameTaken
 	CodeInvalidState       ErrorCode = apigen.InvalidState
 	CodeResourceExhausted  ErrorCode = apigen.ResourceExhausted
@@ -42,6 +44,13 @@ func classify(err error) (int, ErrorCode) {
 	case errors.Is(err, snapshot.ErrNameTaken):
 		return http.StatusConflict, CodeNameTaken
 	case errors.Is(err, snapshot.ErrInvalidName), errors.Is(err, snapshot.ErrNameLooksLikeID):
+		return http.StatusBadRequest, CodeInvalidRequest
+	case errors.Is(err, files.ErrPathNotFound):
+		return http.StatusNotFound, CodePathNotFound
+	case errors.Is(err, files.ErrTooLarge):
+		return http.StatusRequestEntityTooLarge, CodeResourceExhausted
+	case errors.Is(err, files.ErrInvalidPath), errors.Is(err, files.ErrNotRegular),
+		errors.Is(err, files.ErrUnsafeEntry), errors.Is(err, files.ErrNotDirectory):
 		return http.StatusBadRequest, CodeInvalidRequest
 	case errors.Is(err, sandbox.ErrNotFound):
 		return http.StatusNotFound, CodeSandboxNotFound

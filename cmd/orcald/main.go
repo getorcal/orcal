@@ -16,6 +16,7 @@ import (
 	"github.com/getorcal/orcal/internal/auth"
 	"github.com/getorcal/orcal/internal/config"
 	"github.com/getorcal/orcal/internal/exec"
+	"github.com/getorcal/orcal/internal/files"
 	"github.com/getorcal/orcal/internal/runtime/docker"
 	"github.com/getorcal/orcal/internal/sandbox"
 	"github.com/getorcal/orcal/internal/snapshot"
@@ -107,6 +108,12 @@ func run() error {
 	// Leaving SetSnapshots uncalled compiles fine and nil-panics on the first fork at runtime.
 	snapshots := snapshot.NewService(store.Snapshots(), sandboxes, rt)
 	sandboxes.SetSnapshots(snapshots)
+	fileSvc := files.NewService(sandboxes, rt, files.Limits{
+		FileMaxBytes:     cfg.FileMaxBytes,
+		ArchiveMaxBytes:  cfg.ArchiveMaxBytes,
+		ListMaxEntries:   cfg.ListMaxEntries,
+		ListMaxScanBytes: cfg.ListMaxScanBytes,
+	})
 
 	server := &http.Server{
 		Addr: cfg.Addr,
@@ -114,6 +121,7 @@ func run() error {
 			Sandboxes: sandboxes,
 			Execs:     execs,
 			Snapshots: snapshots,
+			Files:     fileSvc,
 			TokenHash: tokenHash,
 			Version:   version,
 			Logger:    logger,

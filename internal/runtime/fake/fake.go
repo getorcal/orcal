@@ -91,6 +91,17 @@ func (f *Fake) LastCreateSpec() runtime.CreateSpec {
 	return f.lastCreateSpec
 }
 
+func (f *Fake) IDForSandbox(sandboxID string) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for id, c := range f.containers {
+		if c.spec.SandboxID == sandboxID {
+			return id
+		}
+	}
+	return ""
+}
+
 func (f *Fake) Create(ctx context.Context, spec runtime.CreateSpec) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

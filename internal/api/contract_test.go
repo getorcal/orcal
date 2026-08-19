@@ -96,6 +96,26 @@ func TestResponsesMatchTheOpenAPIContract(t *testing.T) {
 		assertMatchesContract(t, router, execReq, execResp, execBody)
 	})
 
+	runtimeID := h.fake.IDForSandbox(created.Id)
+	h.fake.Seed(runtimeID, "/app/a.txt", 0o644, []byte("hello"))
+
+	putFileResp, putFileReq, putFileBody := h.doRawCapturing(t, http.MethodPut, "/v1/sandboxes/my-agent/files?path=/app/b.txt", "application/octet-stream", []byte("hello world"))
+	if putFileResp.StatusCode != http.StatusNoContent {
+		t.Fatalf("put file status = %d, want 204", putFileResp.StatusCode)
+	}
+	t.Run(putFileReq.Method+" "+putFileReq.URL.Path, func(t *testing.T) {
+		assertMatchesContract(t, router, putFileReq, putFileResp, putFileBody)
+	})
+
+	archiveBody := buildTar(t, map[string][]byte{"c.txt": []byte("archived")})
+	putArchiveResp, putArchiveReq, putArchiveBody := h.doRawCapturing(t, http.MethodPut, "/v1/sandboxes/my-agent/archive?path=/app", "application/x-tar", archiveBody)
+	if putArchiveResp.StatusCode != http.StatusNoContent {
+		t.Fatalf("put archive status = %d, want 204", putArchiveResp.StatusCode)
+	}
+	t.Run(putArchiveReq.Method+" "+putArchiveReq.URL.Path, func(t *testing.T) {
+		assertMatchesContract(t, router, putArchiveReq, putArchiveResp, putArchiveBody)
+	})
+
 	cases := []struct {
 		method string
 		path   string
@@ -121,6 +141,10 @@ func TestResponsesMatchTheOpenAPIContract(t *testing.T) {
 		{http.MethodPost, "/v1/sandboxes/my-agent/restore", map[string]any{"snapshot": "v1"}},
 		{http.MethodPost, "/v1/sandboxes/my-agent/start", nil},
 		{http.MethodPost, "/v1/sandboxes/my-agent/stop", nil},
+		{http.MethodGet, "/v1/sandboxes/my-agent/files?path=/app/a.txt", nil},
+		{http.MethodGet, "/v1/sandboxes/my-agent/files/stat?path=/app/a.txt", nil},
+		{http.MethodGet, "/v1/sandboxes/my-agent/files/list?path=/app", nil},
+		{http.MethodGet, "/v1/sandboxes/my-agent/archive?path=/app", nil},
 		{http.MethodDelete, "/v1/sandboxes/" + created.Id, nil},
 	}
 

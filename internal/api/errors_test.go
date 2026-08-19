@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/getorcal/orcal/internal/exec"
+	"github.com/getorcal/orcal/internal/files"
 	"github.com/getorcal/orcal/internal/runtime"
 	"github.com/getorcal/orcal/internal/sandbox"
 	"github.com/getorcal/orcal/internal/snapshot"
@@ -36,6 +37,12 @@ func TestClassifyMapsEveryDomainSentinel(t *testing.T) {
 		{fmt.Errorf("wrapped: %w", snapshot.ErrNameTaken), http.StatusConflict, CodeNameTaken},
 		{fmt.Errorf("wrapped: %w", snapshot.ErrInvalidName), http.StatusBadRequest, CodeInvalidRequest},
 		{fmt.Errorf("wrapped: %w", snapshot.ErrNameLooksLikeID), http.StatusBadRequest, CodeInvalidRequest},
+		{fmt.Errorf("wrapped: %w", files.ErrPathNotFound), http.StatusNotFound, CodePathNotFound},
+		{fmt.Errorf("wrapped: %w", files.ErrTooLarge), http.StatusRequestEntityTooLarge, CodeResourceExhausted},
+		{fmt.Errorf("wrapped: %w", files.ErrInvalidPath), http.StatusBadRequest, CodeInvalidRequest},
+		{fmt.Errorf("wrapped: %w", files.ErrNotRegular), http.StatusBadRequest, CodeInvalidRequest},
+		{fmt.Errorf("wrapped: %w", files.ErrUnsafeEntry), http.StatusBadRequest, CodeInvalidRequest},
+		{fmt.Errorf("wrapped: %w", files.ErrNotDirectory), http.StatusBadRequest, CodeInvalidRequest},
 		{errors.New("something unexpected"), http.StatusInternalServerError, CodeInternalError},
 	}
 	for _, c := range cases {

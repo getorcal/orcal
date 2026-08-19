@@ -23,6 +23,7 @@ import (
 	"github.com/getorcal/orcal/internal/api"
 	"github.com/getorcal/orcal/internal/auth"
 	"github.com/getorcal/orcal/internal/exec"
+	"github.com/getorcal/orcal/internal/files"
 	"github.com/getorcal/orcal/internal/runtime/docker"
 	"github.com/getorcal/orcal/internal/sandbox"
 	"github.com/getorcal/orcal/internal/snapshot"
@@ -92,11 +93,18 @@ func newEnv(t *testing.T) *env {
 	})
 	snapshots := snapshot.NewService(st.Snapshots(), sandboxes, rt)
 	sandboxes.SetSnapshots(snapshots)
+	fileSvc := files.NewService(sandboxes, rt, files.Limits{
+		FileMaxBytes:     1 << 20,
+		ArchiveMaxBytes:  1 << 20,
+		ListMaxEntries:   1000,
+		ListMaxScanBytes: 1 << 20,
+	})
 
 	srv := httptest.NewServer(api.NewServer(api.Options{
 		Sandboxes: sandboxes,
 		Execs:     execs,
 		Snapshots: snapshots,
+		Files:     fileSvc,
 		TokenHash: auth.HashToken(testToken),
 		Version:   "integration",
 		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),

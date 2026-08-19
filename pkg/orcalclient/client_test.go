@@ -15,6 +15,7 @@ import (
 	"github.com/getorcal/orcal/internal/api"
 	"github.com/getorcal/orcal/internal/auth"
 	"github.com/getorcal/orcal/internal/exec"
+	"github.com/getorcal/orcal/internal/files"
 	"github.com/getorcal/orcal/internal/runtime"
 	"github.com/getorcal/orcal/internal/runtime/fake"
 	"github.com/getorcal/orcal/internal/sandbox"
@@ -43,11 +44,18 @@ func newClient(t *testing.T) (*orcalclient.Client, *fake.Fake, *exec.Service) {
 	}
 	snapshots := snapshot.NewService(st.Snapshots(), sandboxes, f)
 	sandboxes.SetSnapshots(snapshots)
+	fileSvc := files.NewService(sandboxes, f, files.Limits{
+		FileMaxBytes:     1 << 20,
+		ArchiveMaxBytes:  1 << 20,
+		ListMaxEntries:   1000,
+		ListMaxScanBytes: 1 << 20,
+	})
 
 	srv := httptest.NewServer(api.NewServer(api.Options{
 		Sandboxes: sandboxes,
 		Execs:     execs,
 		Snapshots: snapshots,
+		Files:     fileSvc,
 		TokenHash: auth.HashToken(token),
 		Version:   "test",
 		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
