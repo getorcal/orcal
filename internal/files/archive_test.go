@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"testing"
 
 	"github.com/getorcal/orcal/internal/files"
@@ -164,8 +163,8 @@ func TestUploadArchiveStripsSetuid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stat() error = %v", err)
 	}
-	if info.Mode&fs.ModeSetuid != 0 {
-		t.Errorf("Mode = %v, want setuid stripped", info.Mode)
+	if info.Mode&0o4000 != 0 {
+		t.Errorf("Mode = %#o, want setuid stripped", info.Mode)
 	}
 }
 
