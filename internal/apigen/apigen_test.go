@@ -58,3 +58,21 @@ func TestGeneratedSnapshotTypesCoverTheContract(t *testing.T) {
 		t.Error("zero Sandbox.ParentSnapshotId is non-nil, want nil")
 	}
 }
+
+func TestGeneratedFileTypesCoverTheContract(t *testing.T) {
+	var fi FileInfo
+	if fi.Name != "" || fi.IsDir {
+		t.Errorf("zero FileInfo = %+v, want empty", fi)
+	}
+	if fi.LinkTarget != nil {
+		t.Error("zero FileInfo.LinkTarget is non-nil; it must be optional")
+	}
+
+	var fl FileList
+	if fl.Items != nil {
+		t.Error("zero FileList.Items is non-nil, want nil")
+	}
+	if fl.Truncated {
+		t.Error("zero FileList.Truncated = true, want false")
+	}
+}

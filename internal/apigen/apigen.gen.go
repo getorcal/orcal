@@ -14,6 +14,7 @@ const (
 	InvalidRequest     ErrorBodyCode = "invalid_request"
 	InvalidState       ErrorBodyCode = "invalid_state"
 	NameTaken          ErrorBodyCode = "name_taken"
+	PathNotFound       ErrorBodyCode = "path_not_found"
 	ResourceExhausted  ErrorBodyCode = "resource_exhausted"
 	RuntimeUnavailable ErrorBodyCode = "runtime_unavailable"
 	SandboxNotFound    ErrorBodyCode = "sandbox_not_found"
@@ -33,6 +34,8 @@ func (e ErrorBodyCode) Valid() bool {
 	case InvalidState:
 		return true
 	case NameTaken:
+		return true
+	case PathNotFound:
 		return true
 	case ResourceExhausted:
 		return true
@@ -165,6 +168,26 @@ type ExecList struct {
 	NextCursor *string `json:"next_cursor,omitempty"`
 }
 
+// FileInfo defines model for FileInfo.
+type FileInfo struct {
+	IsDir      bool    `json:"is_dir"`
+	LinkTarget *string `json:"link_target,omitempty"`
+
+	// Mode Octal permission string, e.g. 0644
+	Mode  string    `json:"mode"`
+	Mtime time.Time `json:"mtime"`
+	Name  string    `json:"name"`
+	Size  int64     `json:"size"`
+}
+
+// FileList defines model for FileList.
+type FileList struct {
+	Items []FileInfo `json:"items"`
+
+	// Truncated True when the listing hit a configured cap and is incomplete
+	Truncated bool `json:"truncated"`
+}
+
 // Resources defines model for Resources.
 type Resources struct {
 	CpuMillis   int   `json:"cpu_millis"`
@@ -240,10 +263,40 @@ type ListSandboxesParams struct {
 	Label  *[]string `form:"label,omitempty" json:"label,omitempty"`
 }
 
+// GetArchiveParams defines parameters for GetArchive.
+type GetArchiveParams struct {
+	Path string `form:"path" json:"path"`
+}
+
+// PutArchiveParams defines parameters for PutArchive.
+type PutArchiveParams struct {
+	Path string `form:"path" json:"path"`
+}
+
 // ListExecsParams defines parameters for ListExecs.
 type ListExecsParams struct {
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// GetFileParams defines parameters for GetFile.
+type GetFileParams struct {
+	Path string `form:"path" json:"path"`
+}
+
+// PutFileParams defines parameters for PutFile.
+type PutFileParams struct {
+	Path string `form:"path" json:"path"`
+}
+
+// ListFilesParams defines parameters for ListFiles.
+type ListFilesParams struct {
+	Path string `form:"path" json:"path"`
+}
+
+// StatFileParams defines parameters for StatFile.
+type StatFileParams struct {
+	Path string `form:"path" json:"path"`
 }
 
 // ListSandboxSnapshotsParams defines parameters for ListSandboxSnapshots.

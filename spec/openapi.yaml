@@ -245,6 +245,106 @@ paths:
               schema: { $ref: "#/components/schemas/SnapshotList" }
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+  /sandboxes/{ref}/files:
+    parameters:
+      - { name: ref, in: path, required: true, schema: { type: string } }
+      - { name: path, in: query, required: true, schema: { type: string } }
+    get:
+      operationId: getFile
+      responses:
+        "200":
+          description: File contents
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+    put:
+      operationId: putFile
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "204":
+          description: File written
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /sandboxes/{ref}/files/stat:
+    parameters:
+      - { name: ref, in: path, required: true, schema: { type: string } }
+      - { name: path, in: query, required: true, schema: { type: string } }
+    get:
+      operationId: statFile
+      responses:
+        "200":
+          description: File metadata
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FileInfo" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /sandboxes/{ref}/files/list:
+    parameters:
+      - { name: ref, in: path, required: true, schema: { type: string } }
+      - { name: path, in: query, required: true, schema: { type: string } }
+    get:
+      operationId: listFiles
+      responses:
+        "200":
+          description: Directory listing
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FileList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /sandboxes/{ref}/archive:
+    parameters:
+      - { name: ref, in: path, required: true, schema: { type: string } }
+      - { name: path, in: query, required: true, schema: { type: string } }
+    get:
+      operationId: getArchive
+      responses:
+        "200":
+          description: Tar archive of the path
+          content:
+            application/x-tar:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+    put:
+      operationId: putArchive
+      requestBody:
+        required: true
+        content:
+          application/x-tar:
+            schema: { type: string, format: binary }
+      responses:
+        "204":
+          description: Archive extracted
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
   /snapshots/{ref}:
     parameters:
       - { name: ref, in: path, required: true, schema: { type: string } }
@@ -412,6 +512,26 @@ components:
       required: [snapshot]
       properties:
         snapshot: { type: string }
+    FileInfo:
+      type: object
+      required: [name, size, mode, mtime, is_dir]
+      properties:
+        name: { type: string }
+        size: { type: integer, format: int64 }
+        mode: { type: string, description: "Octal permission string, e.g. 0644" }
+        mtime: { type: string, format: date-time }
+        is_dir: { type: boolean }
+        link_target: { type: string }
+    FileList:
+      type: object
+      required: [items, truncated]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/FileInfo" }
+        truncated:
+          type: boolean
+          description: True when the listing hit a configured cap and is incomplete
     Error:
       type: object
       required: [error]
@@ -434,6 +554,7 @@ components:
             - resource_exhausted
             - runtime_unavailable
             - internal_error
+            - path_not_found
         message: { type: string }
         details:
           type: object
