@@ -38,7 +38,7 @@ func (f *Fake) Seed(id, p string, mode fs.FileMode, data []byte) {
 			c.files[dir] = &fileNode{mode: 0o755, isDir: true, modTime: fakeModTime}
 		}
 	}
-	c.files[p] = &fileNode{mode: mode, data: data, modTime: fakeModTime}
+	c.files[p] = &fileNode{mode: mode, data: data, isDir: data == nil, modTime: fakeModTime}
 }
 
 var fakeModTime = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
