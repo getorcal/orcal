@@ -7,7 +7,7 @@ ARG VERSION=dev
 RUN CGO_ENABLED=0 go build -ldflags "-X main.version=${VERSION}" -o /out/orcald ./cmd/orcald
 RUN CGO_ENABLED=0 go build -ldflags "-X main.version=${VERSION}" -o /out/orcal ./cmd/orcal
 
-FROM alpine:3.20
+FROM alpine:3.24
 RUN adduser -D -u 10001 orcal && mkdir -p /var/lib/orcal && chown orcal /var/lib/orcal
 COPY --from=build /out/orcald /usr/local/bin/orcald
 COPY --from=build /out/orcal /usr/local/bin/orcal
