@@ -43,19 +43,15 @@ func NewServer(opts Options) *Server {
 	}
 
 	public := http.NewServeMux()
-	public.HandleFunc("GET /v1/healthz", s.handleHealth)
-	public.HandleFunc("GET /v1/version", s.handleVersion)
-
 	private := http.NewServeMux()
-	private.HandleFunc("POST /v1/sandboxes", s.handleCreateSandbox)
-	private.HandleFunc("GET /v1/sandboxes", s.handleListSandboxes)
-	private.HandleFunc("GET /v1/sandboxes/{ref}", s.handleGetSandbox)
-	private.HandleFunc("DELETE /v1/sandboxes/{ref}", s.handleDestroySandbox)
-	private.HandleFunc("POST /v1/sandboxes/{ref}/start", s.handleStartSandbox)
-	private.HandleFunc("POST /v1/sandboxes/{ref}/stop", s.handleStopSandbox)
-	s.registerExecRoutes(private)
-	s.registerSnapshotRoutes(private)
-	s.registerFileRoutes(private)
+	for _, r := range s.routes() {
+		pattern := r.Method + " " + r.Path
+		if r.Public {
+			public.Handle(pattern, r.Handler)
+			continue
+		}
+		private.Handle(pattern, r.Handler)
+	}
 
 	root := http.NewServeMux()
 	root.Handle("/v1/healthz", public)

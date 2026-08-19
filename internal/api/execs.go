@@ -15,13 +15,6 @@ import (
 
 const heartbeatInterval = 30 * time.Second
 
-func (s *Server) registerExecRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /v1/sandboxes/{ref}/execs", s.handleCreateExec)
-	mux.HandleFunc("GET /v1/sandboxes/{ref}/execs", s.handleListExecs)
-	mux.HandleFunc("GET /v1/execs/{id}", s.handleGetExec)
-	mux.HandleFunc("GET /v1/execs/{id}/output", s.handleExecOutput)
-}
-
 func (s *Server) handleCreateExec(w http.ResponseWriter, r *http.Request) {
 	sb, err := s.sandboxes.Get(r.Context(), r.PathValue("ref"))
 	if err != nil {

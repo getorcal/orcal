@@ -11,15 +11,6 @@ import (
 	"github.com/getorcal/orcal/internal/snapshot"
 )
 
-func (s *Server) registerSnapshotRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /v1/sandboxes/{ref}/snapshots", s.handleCreateSnapshot)
-	mux.HandleFunc("GET /v1/sandboxes/{ref}/snapshots", s.handleListSandboxSnapshots)
-	mux.HandleFunc("POST /v1/sandboxes/{ref}/restore", s.handleRestoreSandbox)
-	mux.HandleFunc("GET /v1/snapshots", s.handleListSnapshots)
-	mux.HandleFunc("GET /v1/snapshots/{ref}", s.handleGetSnapshot)
-	mux.HandleFunc("DELETE /v1/snapshots/{ref}", s.handleDeleteSnapshot)
-}
-
 func (s *Server) handleCreateSnapshot(w http.ResponseWriter, r *http.Request) {
 	// The body is optional, so EOF is tolerated — but it must still be decoded rather than
 	// gated on ContentLength, which is -1 for chunked and non-seekable bodies (including

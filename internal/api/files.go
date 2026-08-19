@@ -8,15 +8,6 @@ import (
 	"github.com/getorcal/orcal/internal/apigen"
 )
 
-func (s *Server) registerFileRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /v1/sandboxes/{ref}/files", s.handleReadFile)
-	mux.HandleFunc("PUT /v1/sandboxes/{ref}/files", s.handleWriteFile)
-	mux.HandleFunc("GET /v1/sandboxes/{ref}/files/stat", s.handleStatFile)
-	mux.HandleFunc("GET /v1/sandboxes/{ref}/files/list", s.handleListFiles)
-	mux.HandleFunc("GET /v1/sandboxes/{ref}/archive", s.handleDownloadArchive)
-	mux.HandleFunc("PUT /v1/sandboxes/{ref}/archive", s.handleUploadArchive)
-}
-
 func (s *Server) handleReadFile(w http.ResponseWriter, r *http.Request) {
 	rc, info, err := s.files.Read(r.Context(), r.PathValue("ref"), r.URL.Query().Get("path"))
 	if err != nil {
