@@ -116,40 +116,50 @@ func TestResponsesMatchTheOpenAPIContract(t *testing.T) {
 		assertMatchesContract(t, router, putArchiveReq, putArchiveResp, putArchiveBody)
 	})
 
+	seedAppFile := func(t *testing.T) {
+		t.Helper()
+		runtimeID := h.fake.IDForSandbox(created.Id)
+		h.fake.Seed(runtimeID, "/app/a.txt", 0o644, []byte("hello"))
+	}
+
 	cases := []struct {
 		method string
 		path   string
 		body   any
+		setup  func(t *testing.T)
 	}{
-		{http.MethodGet, "/v1/healthz", nil},
-		{http.MethodGet, "/v1/version", nil},
-		{http.MethodGet, "/v1/sandboxes", nil},
-		{http.MethodGet, "/v1/sandboxes/my-agent", nil},
-		{http.MethodGet, "/v1/sandboxes/ghost", nil},
-		{http.MethodGet, "/v1/sandboxes/my-agent/execs", nil},
-		{http.MethodGet, "/v1/execs/" + createdExec.Id, nil},
-		{http.MethodGet, "/v1/execs/" + createdExec.Id + "/output", nil},
-		{http.MethodGet, "/v1/execs/" + createdExec.Id + "/output?from=notanumber", nil},
-		{http.MethodPost, "/v1/sandboxes", map[string]any{"image": "alpine"}},
-		{http.MethodPost, "/v1/sandboxes", map[string]any{"name": "my-agent", "image": "alpine"}},
-		{http.MethodPost, "/v1/sandboxes", map[string]any{"name": "forked", "snapshot": "v1"}},
-		{http.MethodPost, "/v1/sandboxes", map[string]any{"name": "ghost-fork", "snapshot": "ghost-snapshot"}},
-		{http.MethodGet, "/v1/sandboxes/my-agent/snapshots", nil},
-		{http.MethodGet, "/v1/snapshots", nil},
-		{http.MethodGet, "/v1/snapshots?sandbox=ghost", nil},
-		{http.MethodGet, "/v1/snapshots/" + createdSnapshot.Id, nil},
-		{http.MethodPost, "/v1/sandboxes/my-agent/restore", map[string]any{"snapshot": "v1"}},
-		{http.MethodPost, "/v1/sandboxes/my-agent/start", nil},
-		{http.MethodPost, "/v1/sandboxes/my-agent/stop", nil},
-		{http.MethodGet, "/v1/sandboxes/my-agent/files?path=/app/a.txt", nil},
-		{http.MethodGet, "/v1/sandboxes/my-agent/files/stat?path=/app/a.txt", nil},
-		{http.MethodGet, "/v1/sandboxes/my-agent/files/list?path=/app", nil},
-		{http.MethodGet, "/v1/sandboxes/my-agent/archive?path=/app", nil},
-		{http.MethodDelete, "/v1/sandboxes/" + created.Id, nil},
+		{http.MethodGet, "/v1/healthz", nil, nil},
+		{http.MethodGet, "/v1/version", nil, nil},
+		{http.MethodGet, "/v1/sandboxes", nil, nil},
+		{http.MethodGet, "/v1/sandboxes/my-agent", nil, nil},
+		{http.MethodGet, "/v1/sandboxes/ghost", nil, nil},
+		{http.MethodGet, "/v1/sandboxes/my-agent/execs", nil, nil},
+		{http.MethodGet, "/v1/execs/" + createdExec.Id, nil, nil},
+		{http.MethodGet, "/v1/execs/" + createdExec.Id + "/output", nil, nil},
+		{http.MethodGet, "/v1/execs/" + createdExec.Id + "/output?from=notanumber", nil, nil},
+		{http.MethodPost, "/v1/sandboxes", map[string]any{"image": "alpine"}, nil},
+		{http.MethodPost, "/v1/sandboxes", map[string]any{"name": "my-agent", "image": "alpine"}, nil},
+		{http.MethodPost, "/v1/sandboxes", map[string]any{"name": "forked", "snapshot": "v1"}, nil},
+		{http.MethodPost, "/v1/sandboxes", map[string]any{"name": "ghost-fork", "snapshot": "ghost-snapshot"}, nil},
+		{http.MethodGet, "/v1/sandboxes/my-agent/snapshots", nil, nil},
+		{http.MethodGet, "/v1/snapshots", nil, nil},
+		{http.MethodGet, "/v1/snapshots?sandbox=ghost", nil, nil},
+		{http.MethodGet, "/v1/snapshots/" + createdSnapshot.Id, nil, nil},
+		{http.MethodPost, "/v1/sandboxes/my-agent/restore", map[string]any{"snapshot": "v1"}, nil},
+		{http.MethodPost, "/v1/sandboxes/my-agent/start", nil, nil},
+		{http.MethodPost, "/v1/sandboxes/my-agent/stop", nil, nil},
+		{http.MethodGet, "/v1/sandboxes/my-agent/files?path=/app/a.txt", nil, seedAppFile},
+		{http.MethodGet, "/v1/sandboxes/my-agent/files/stat?path=/app/a.txt", nil, seedAppFile},
+		{http.MethodGet, "/v1/sandboxes/my-agent/files/list?path=/app", nil, seedAppFile},
+		{http.MethodGet, "/v1/sandboxes/my-agent/archive?path=/app", nil, seedAppFile},
+		{http.MethodDelete, "/v1/sandboxes/" + created.Id, nil, nil},
 	}
 
 	for _, c := range cases {
 		t.Run(c.method+" "+c.path, func(t *testing.T) {
+			if c.setup != nil {
+				c.setup(t)
+			}
 			resp, req, body := h.doCapturing(t, c.method, c.path, c.body)
 			assertMatchesContract(t, router, req, resp, body)
 		})

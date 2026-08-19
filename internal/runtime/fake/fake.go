@@ -95,7 +95,7 @@ func (f *Fake) IDForSandbox(sandboxID string) string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for id, c := range f.containers {
-		if c.spec.SandboxID == sandboxID {
+		if c.spec.SandboxID == sandboxID && c.state != runtime.ContainerGone {
 			return id
 		}
 	}
