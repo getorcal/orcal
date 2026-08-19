@@ -3,6 +3,7 @@ package audit
 import (
 	"context"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 )
@@ -26,7 +27,7 @@ func (m *MemoryRepo) List(_ context.Context, f Filter) ([]*Event, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	out := make([]*Event, 0, len(m.events))
-	for _, e := range slices.Backward(m.events) {
+	for _, e := range m.events {
 		if f.Actor != "" && e.ActorTokenID != f.Actor {
 			continue
 		}
@@ -50,9 +51,10 @@ func (m *MemoryRepo) List(_ context.Context, f Filter) ([]*Event, error) {
 		}
 		clone := *e
 		out = append(out, &clone)
-		if f.Limit > 0 && len(out) >= f.Limit {
-			break
-		}
+	}
+	slices.SortFunc(out, func(a, b *Event) int { return strings.Compare(b.ID, a.ID) })
+	if f.Limit > 0 && len(out) > f.Limit {
+		out = out[:f.Limit]
 	}
 	return out, nil
 }
@@ -79,7 +81,21 @@ func (m *MemoryRepo) DeleteBeyondCount(_ context.Context, keep int) (int64, erro
 	if len(m.events) <= keep {
 		return 0, nil
 	}
-	removed := int64(len(m.events) - keep)
-	m.events = m.events[len(m.events)-keep:]
+	ordered := slices.Clone(m.events)
+	slices.SortFunc(ordered, func(a, b *Event) int { return strings.Compare(b.ID, a.ID) })
+	keepIDs := make(map[string]struct{}, keep)
+	for _, e := range ordered[:keep] {
+		keepIDs[e.ID] = struct{}{}
+	}
+	kept := m.events[:0]
+	var removed int64
+	for _, e := range m.events {
+		if _, ok := keepIDs[e.ID]; ok {
+			kept = append(kept, e)
+			continue
+		}
+		removed++
+	}
+	m.events = kept
 	return removed, nil
 }

@@ -107,11 +107,69 @@ func TestEventFilters(t *testing.T) {
 	}
 }
 
+func TestEventsCursorContinuesStrictlyOlderWithNoOverlap(t *testing.T) {
+	repo, ctx := newEventRepo(t)
+	now := time.Now().UTC()
+	ids := []string{
+		"0192f3a4-5b6c-7d8e-9f01-000000000001",
+		"0192f3a4-5b6c-7d8e-9f01-000000000002",
+		"0192f3a4-5b6c-7d8e-9f01-000000000003",
+		"0192f3a4-5b6c-7d8e-9f01-000000000004",
+		"0192f3a4-5b6c-7d8e-9f01-000000000005",
+	}
+	for i, eid := range ids {
+		e := &audit.Event{
+			ID: eid, Timestamp: now.Add(time.Duration(i) * time.Second), ActorTokenID: "tok-1", ActorName: "ci",
+			Action: audit.ActionSandboxCreate, ResourceType: "sandbox", ResourceID: "sb-1",
+			RequestID: "req-1", Status: 201, RemoteAddr: "10.0.0.1:5555",
+			Details: map[string]any{"image": "alpine"},
+		}
+		if err := repo.Create(ctx, e); err != nil {
+			t.Fatalf("create: %v", err)
+		}
+	}
+
+	first, err := repo.List(ctx, audit.Filter{Limit: 2})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(first) != 2 || first[0].ID != ids[4] || first[1].ID != ids[3] {
+		t.Fatalf("unexpected first page: %+v", first)
+	}
+
+	second, err := repo.List(ctx, audit.Filter{Limit: 2, Cursor: first[len(first)-1].ID})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(second) != 2 || second[0].ID != ids[2] || second[1].ID != ids[1] {
+		t.Fatalf("unexpected second page: %+v", second)
+	}
+
+	seen := map[string]bool{}
+	for _, e := range first {
+		seen[e.ID] = true
+	}
+	for _, e := range second {
+		if seen[e.ID] {
+			t.Fatalf("page overlap on id %s", e.ID)
+		}
+	}
+
+	third, err := repo.List(ctx, audit.Filter{Limit: 2, Cursor: second[len(second)-1].ID})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(third) != 1 || third[0].ID != ids[0] {
+		t.Fatalf("unexpected third page: %+v", third)
+	}
+}
+
 func TestPruneByCountKeepsTheNewest(t *testing.T) {
 	repo, ctx := newEventRepo(t)
 	now := time.Now().UTC()
+	seeded := make([]*audit.Event, 0, 11)
 	for i := range 11 {
-		seedEvent(t, repo, ctx, audit.ActionSandboxCreate, now.Add(time.Duration(i)*time.Second))
+		seeded = append(seeded, seedEvent(t, repo, ctx, audit.ActionSandboxCreate, now.Add(time.Duration(i)*time.Second)))
 		time.Sleep(time.Millisecond)
 	}
 
@@ -128,6 +186,19 @@ func TestPruneByCountKeepsTheNewest(t *testing.T) {
 	}
 	if len(remaining) != 10 {
 		t.Fatalf("expected 10 remaining, got %d", len(remaining))
+	}
+
+	remainingIDs := make(map[string]bool, len(remaining))
+	for _, e := range remaining {
+		remainingIDs[e.ID] = true
+	}
+	if remainingIDs[seeded[0].ID] {
+		t.Fatalf("expected oldest event %s to be pruned, survivors: %v", seeded[0].ID, remainingIDs)
+	}
+	for _, want := range seeded[1:] {
+		if !remainingIDs[want.ID] {
+			t.Fatalf("expected newest event %s to survive prune, survivors: %v", want.ID, remainingIDs)
+		}
 	}
 }
 
