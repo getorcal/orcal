@@ -1,0 +1,101 @@
+package files
+
+import (
+	"archive/tar"
+	"errors"
+	"io/fs"
+	"testing"
+)
+
+func TestValidatePathAcceptsAbsoluteCleanPaths(t *testing.T) {
+	for _, in := range []string{"/app", "/app/main.go", "/", "/etc/nginx/nginx.conf"} {
+		got, err := ValidatePath(in)
+		if err != nil {
+			t.Errorf("ValidatePath(%q) error = %v, want nil", in, err)
+		}
+		if got != in {
+			t.Errorf("ValidatePath(%q) = %q, want unchanged", in, got)
+		}
+	}
+}
+
+func TestValidatePathCleansRedundancy(t *testing.T) {
+	got, err := ValidatePath("/app//src/./main.go")
+	if err != nil {
+		t.Fatalf("ValidatePath() error = %v", err)
+	}
+	if got != "/app/src/main.go" {
+		t.Errorf("ValidatePath() = %q, want /app/src/main.go", got)
+	}
+}
+
+func TestValidatePathRejectsRelativeAndTraversal(t *testing.T) {
+	for _, in := range []string{"", "app/main.go", "./main.go", "/app/../../etc/passwd", "../etc/passwd"} {
+		if _, err := ValidatePath(in); !errors.Is(err, ErrInvalidPath) {
+			t.Errorf("ValidatePath(%q) error = %v, want ErrInvalidPath", in, err)
+		}
+	}
+}
+
+func TestSanitizeEntryAcceptsRegularFilesAndDirs(t *testing.T) {
+	for _, h := range []*tar.Header{
+		{Name: "main.go", Typeflag: tar.TypeReg, Mode: 0o644},
+		{Name: "src/", Typeflag: tar.TypeDir, Mode: 0o755},
+		{Name: "src/deep/f.txt", Typeflag: tar.TypeReg, Mode: 0o600},
+	} {
+		if err := SanitizeEntry(h, "/app"); err != nil {
+			t.Errorf("SanitizeEntry(%q) error = %v, want nil", h.Name, err)
+		}
+	}
+}
+
+func TestSanitizeEntryRejectsEscapingNames(t *testing.T) {
+	for _, name := range []string{"../escape.txt", "src/../../escape.txt", "/absolute.txt", "/etc/passwd"} {
+		h := &tar.Header{Name: name, Typeflag: tar.TypeReg, Mode: 0o644}
+		if err := SanitizeEntry(h, "/app"); !errors.Is(err, ErrUnsafeEntry) {
+			t.Errorf("SanitizeEntry(%q) error = %v, want ErrUnsafeEntry", name, err)
+		}
+	}
+}
+
+func TestSanitizeEntryRejectsEscapingLinkTargets(t *testing.T) {
+	cases := []*tar.Header{
+		{Name: "link", Typeflag: tar.TypeSymlink, Linkname: "../../etc/passwd"},
+		{Name: "link", Typeflag: tar.TypeSymlink, Linkname: "/etc/passwd"},
+		{Name: "hard", Typeflag: tar.TypeLink, Linkname: "../outside"},
+	}
+	for _, h := range cases {
+		if err := SanitizeEntry(h, "/app"); !errors.Is(err, ErrUnsafeEntry) {
+			t.Errorf("SanitizeEntry(link -> %q) error = %v, want ErrUnsafeEntry", h.Linkname, err)
+		}
+	}
+}
+
+func TestSanitizeEntryAcceptsInTreeSymlink(t *testing.T) {
+	h := &tar.Header{Name: "src/link", Typeflag: tar.TypeSymlink, Linkname: "main.go"}
+	if err := SanitizeEntry(h, "/app"); err != nil {
+		t.Errorf("SanitizeEntry(in-tree symlink) error = %v, want nil", err)
+	}
+}
+
+func TestSanitizeEntryRejectsSpecialFileTypes(t *testing.T) {
+	for _, tf := range []byte{tar.TypeChar, tar.TypeBlock, tar.TypeFifo} {
+		h := &tar.Header{Name: "special", Typeflag: tf}
+		if err := SanitizeEntry(h, "/app"); !errors.Is(err, ErrUnsafeEntry) {
+			t.Errorf("SanitizeEntry(typeflag %v) error = %v, want ErrUnsafeEntry", tf, err)
+		}
+	}
+}
+
+func TestSanitizeEntryStripsSetuidAndSetgid(t *testing.T) {
+	h := &tar.Header{Name: "tool", Typeflag: tar.TypeReg, Mode: int64(fs.ModeSetuid | fs.ModeSetgid | 0o755)}
+	if err := SanitizeEntry(h, "/app"); err != nil {
+		t.Fatalf("SanitizeEntry() error = %v", err)
+	}
+	if fs.FileMode(h.Mode)&(fs.ModeSetuid|fs.ModeSetgid) != 0 {
+		t.Errorf("Mode = %v, want setuid and setgid cleared", fs.FileMode(h.Mode))
+	}
+	if fs.FileMode(h.Mode).Perm() != 0o755 {
+		t.Errorf("Perm = %v, want 0755 preserved", fs.FileMode(h.Mode).Perm())
+	}
+}
