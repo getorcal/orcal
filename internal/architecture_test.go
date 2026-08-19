@@ -16,12 +16,12 @@ func TestOnlyTheDockerAdapterImportsDocker(t *testing.T) {
 	}
 
 	const allowed = "github.com/getorcal/orcal/internal/runtime/docker"
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
 		pkg, imports, found := strings.Cut(line, " ")
 		if !found || pkg == allowed {
 			continue
 		}
-		for _, imported := range strings.Fields(imports) {
+		for imported := range strings.FieldsSeq(imports) {
 			if strings.HasPrefix(imported, "github.com/docker/") {
 				t.Errorf("%s imports %s; only %s may import Docker", pkg, imported, allowed)
 			}
@@ -29,10 +29,10 @@ func TestOnlyTheDockerAdapterImportsDocker(t *testing.T) {
 	}
 }
 
-// The go directive is the minimum toolchain consumers need, and Go gates new runtime behaviour
+// The go directive is the minimum toolchain consumers need, and Go gates new runtime behavior
 // on it — container-aware GOMAXPROCS is why this project is on 1.25 rather than the 1.23.0 its
 // dependencies would allow. A build image older than the directive compiles fine and silently
-// drops that behaviour, so the two are asserted together.
+// drops that behavior, so the two are asserted together.
 func TestGoDirectiveMatchesTheBuildImage(t *testing.T) {
 	mod, err := os.ReadFile("../go.mod")
 	if err != nil {
@@ -41,7 +41,7 @@ func TestGoDirectiveMatchesTheBuildImage(t *testing.T) {
 
 	const want = "go 1.25.0"
 	directive := ""
-	for _, line := range strings.Split(string(mod), "\n") {
+	for line := range strings.SplitSeq(string(mod), "\n") {
 		if strings.HasPrefix(line, "go ") {
 			directive = line
 			break
@@ -60,6 +60,6 @@ func TestGoDirectiveMatchesTheBuildImage(t *testing.T) {
 		t.Fatalf("read Dockerfile: %v", err)
 	}
 	if !strings.Contains(string(dockerfile), "FROM golang:"+series+"-alpine") {
-		t.Errorf("deploy/Dockerfile does not build on golang:%s-alpine, so the shipped binary would not get the behaviour the go directive enables", series)
+		t.Errorf("deploy/Dockerfile does not build on golang:%s-alpine, so the shipped binary would not get the behavior the go directive enables", series)
 	}
 }

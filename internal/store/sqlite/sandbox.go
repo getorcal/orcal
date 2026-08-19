@@ -74,11 +74,13 @@ func (r *sandboxRepo) List(ctx context.Context, f sandbox.Filter) ([]*sandbox.Sa
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
+		// json_each rather than json_extract: a label key containing a dot or bracket would be
+		// parsed as a path expression by json_extract("$."+key) and silently fail to match.
+		// Every clause is identical, so they are repeated and the sorted keys bound in order,
+		// which keeps the generated SQL deterministic.
+		const labelClause = ` AND EXISTS (SELECT 1 FROM json_each(labels) WHERE json_each.key = ? AND json_each.value = ?)`
+		query += strings.Repeat(labelClause, len(keys))
 		for _, k := range keys {
-			// json_each rather than json_extract: a label key containing a dot or bracket
-			// would be parsed as a path expression by json_extract("$."+key) and silently
-			// fail to match. Keys are sorted first so the generated SQL is deterministic.
-			query += ` AND EXISTS (SELECT 1 FROM json_each(labels) WHERE json_each.key = ? AND json_each.value = ?)`
 			args = append(args, k, f.Labels[k])
 		}
 	}

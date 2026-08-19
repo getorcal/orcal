@@ -5,8 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/getorcal/orcal/pkg/orcalclient"
 	"github.com/spf13/cobra"
+
+	"github.com/getorcal/orcal/pkg/orcalclient"
 )
 
 var errStopStream = errors.New("orcal: stop reading the output stream")

@@ -75,7 +75,7 @@ func readConfigFile(path string) (string, string, error) {
 		return "", "", err
 	}
 	var url, token string
-	for _, line := range strings.Split(string(raw), "\n") {
+	for line := range strings.SplitSeq(string(raw), "\n") {
 		key, value, found := strings.Cut(line, ":")
 		if !found {
 			continue

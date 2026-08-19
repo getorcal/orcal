@@ -38,7 +38,7 @@ func TestZeroSnapshotHasNilParent(t *testing.T) {
 
 func TestGeneratedIDsSortChronologically(t *testing.T) {
 	ids := make([]string, 0, 20)
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		ids = append(ids, NewID())
 	}
 	for i := 1; i < len(ids); i++ {

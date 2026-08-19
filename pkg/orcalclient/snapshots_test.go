@@ -148,7 +148,7 @@ func TestClientEscapesSnapshotRefs(t *testing.T) {
 	if !errors.As(err, &apiErr) {
 		t.Fatalf("error = %v, want an APIError rather than a corrupted request", err)
 	}
-	if apiErr.StatusCode != 404 {
+	if apiErr.StatusCode != http.StatusNotFound {
 		t.Errorf("status = %d, want 404 — a reserved-character ref must reach the server as one segment", apiErr.StatusCode)
 	}
 }

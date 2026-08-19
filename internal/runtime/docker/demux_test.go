@@ -12,10 +12,11 @@ import (
 )
 
 func dockerFrame(stream byte, payload string) []byte {
-	header := make([]byte, 8)
-	header[0] = stream
-	binary.BigEndian.PutUint32(header[4:], uint32(len(payload)))
-	return append(header, []byte(payload)...)
+	frame := make([]byte, 8+len(payload))
+	frame[0] = stream
+	binary.BigEndian.PutUint32(frame[4:8], uint32(len(payload)))
+	copy(frame[8:], payload)
+	return frame
 }
 
 func TestDemuxSplitsStdoutAndStderr(t *testing.T) {

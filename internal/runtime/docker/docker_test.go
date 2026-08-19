@@ -2,9 +2,11 @@ package docker
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
-	"github.com/docker/docker/errdefs"
+	cerrdefs "github.com/containerd/errdefs"
+
 	"github.com/getorcal/orcal/internal/runtime"
 )
 
@@ -13,7 +15,7 @@ type opaqueDockerError struct{ msg string }
 func (e opaqueDockerError) Error() string { return e.msg }
 
 func TestTranslateMapsInvalidParameterToErrInvalidSpec(t *testing.T) {
-	err := errdefs.InvalidParameter(errors.New("invalid image reference"))
+	err := fmt.Errorf("invalid image reference: %w", cerrdefs.ErrInvalidArgument)
 	got := translate(err)
 	if !errors.Is(got, runtime.ErrInvalidSpec) {
 		t.Errorf("translate(%v) = %v, want wraps ErrInvalidSpec", err, got)
@@ -31,7 +33,7 @@ func TestTranslateDoesNotLeakUnclassifiedDockerErrorType(t *testing.T) {
 }
 
 func TestTranslateMapsImageInUseToErrConflict(t *testing.T) {
-	err := translate(errdefs.Conflict(errors.New("image is being used by running container")))
+	err := translate(fmt.Errorf("image is being used by running container: %w", cerrdefs.ErrConflict))
 	if !errors.Is(err, runtime.ErrConflict) {
 		t.Errorf("translate() = %v, want ErrConflict", err)
 	}

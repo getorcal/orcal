@@ -6,9 +6,10 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/getorcal/orcal/internal/apigen"
 	"github.com/getorcal/orcal/pkg/orcalclient"
-	"github.com/spf13/cobra"
 )
 
 func (a *app) snapshotCmd() *cobra.Command {

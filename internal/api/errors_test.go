@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"testing"
@@ -35,7 +36,7 @@ func TestClassifyMapsEveryDomainSentinel(t *testing.T) {
 		{fmt.Errorf("wrapped: %w", snapshot.ErrNameTaken), http.StatusConflict, CodeNameTaken},
 		{fmt.Errorf("wrapped: %w", snapshot.ErrInvalidName), http.StatusBadRequest, CodeInvalidRequest},
 		{fmt.Errorf("wrapped: %w", snapshot.ErrNameLooksLikeID), http.StatusBadRequest, CodeInvalidRequest},
-		{fmt.Errorf("something unexpected"), http.StatusInternalServerError, CodeInternalError},
+		{errors.New("something unexpected"), http.StatusInternalServerError, CodeInternalError},
 	}
 	for _, c := range cases {
 		status, code := classify(c.err)

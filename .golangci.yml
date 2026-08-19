@@ -1,0 +1,77 @@
+version: "2"
+
+run:
+  timeout: 5m
+  build-tags:
+    - docker
+
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - copyloopvar
+    - durationcheck
+    - errcheck
+    - errorlint
+    - exptostd
+    - fatcontext
+    - govet
+    - ineffassign
+    - intrange
+    - makezero
+    - misspell
+    - modernize
+    - perfsprint
+    - nilerr
+    - noctx
+    - predeclared
+    - rowserrcheck
+    - sqlclosecheck
+    - staticcheck
+    - thelper
+    - unconvert
+    - unused
+    - usestdlibvars
+    - wastedassign
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+    govet:
+      enable:
+        - nilness
+    staticcheck:
+      checks:
+        - all
+        - -ST1000
+        - -ST1020
+        - -ST1021
+        - -ST1022
+    misspell:
+      locale: US
+
+  exclusions:
+    generated: lax
+    presets:
+      - std-error-handling
+    rules:
+      - path: _test\.go
+        linters:
+          - bodyclose
+          - errcheck
+          - noctx
+      # translate() formats causes with %v on purpose so Docker's concrete error types cannot
+      # escape the runtime abstraction via errors.As. See the comment on translate and
+      # TestTranslateDoesNotLeakUnclassifiedDockerErrorType.
+      - path: internal/runtime/docker/docker\.go
+        linters:
+          - errorlint
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/getorcal/orcal

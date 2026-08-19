@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -66,7 +67,7 @@ type ListParams struct {
 func (p ListParams) query() url.Values {
 	q := url.Values{}
 	if p.Limit > 0 {
-		q.Set("limit", fmt.Sprint(p.Limit))
+		q.Set("limit", strconv.Itoa(p.Limit))
 	}
 	if p.Cursor != "" {
 		q.Set("cursor", p.Cursor)

@@ -7,11 +7,12 @@ import (
 	"io"
 	"time"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
-	"github.com/docker/docker/errdefs"
+
 	"github.com/getorcal/orcal/internal/runtime"
 )
 
@@ -36,7 +37,7 @@ func (d *Docker) EnsureNetwork(ctx context.Context, name string) error {
 	if err == nil {
 		return nil
 	}
-	if !errdefs.IsNotFound(err) {
+	if !cerrdefs.IsNotFound(err) {
 		return translate(err)
 	}
 	_, err = d.cli.NetworkCreate(ctx, name, network.CreateOptions{
@@ -45,7 +46,7 @@ func (d *Docker) EnsureNetwork(ctx context.Context, name string) error {
 			"com.docker.network.bridge.enable_icc": "false",
 		},
 	})
-	if err != nil && !errdefs.IsConflict(err) {
+	if err != nil && !cerrdefs.IsConflict(err) {
 		return translate(err)
 	}
 	return nil
@@ -67,7 +68,7 @@ func (d *Docker) ensureImage(ctx context.Context, ref string) error {
 	if inspectErr == nil {
 		return nil
 	}
-	if !errdefs.IsNotFound(inspectErr) {
+	if !cerrdefs.IsNotFound(inspectErr) {
 		return translate(inspectErr)
 	}
 	reader, err := d.cli.ImagePull(ctx, ref, image.PullOptions{})
@@ -92,7 +93,7 @@ func (d *Docker) Stop(ctx context.Context, id string, timeout time.Duration) err
 
 func (d *Docker) Destroy(ctx context.Context, id string) error {
 	err := d.cli.ContainerRemove(ctx, id, container.RemoveOptions{Force: true, RemoveVolumes: true})
-	if errdefs.IsNotFound(err) {
+	if cerrdefs.IsNotFound(err) {
 		return nil
 	}
 	return translate(err)
@@ -100,7 +101,7 @@ func (d *Docker) Destroy(ctx context.Context, id string) error {
 
 func (d *Docker) Inspect(ctx context.Context, id string) (runtime.Status, error) {
 	info, err := d.cli.ContainerInspect(ctx, id)
-	if errdefs.IsNotFound(err) {
+	if cerrdefs.IsNotFound(err) {
 		return runtime.Status{State: runtime.ContainerGone}, nil
 	}
 	if err != nil {
@@ -158,7 +159,7 @@ func (d *Docker) Exec(ctx context.Context, id string, spec runtime.ExecSpec) (ru
 
 func (d *Docker) InspectExec(ctx context.Context, execID string) (runtime.ExecStatus, error) {
 	info, err := d.cli.ContainerExecInspect(ctx, execID)
-	if errdefs.IsNotFound(err) {
+	if cerrdefs.IsNotFound(err) {
 		return runtime.ExecStatus{}, fmt.Errorf("%w: exec %s", runtime.ErrNotFound, execID)
 	}
 	if err != nil {
@@ -174,7 +175,7 @@ func (d *Docker) InspectExec(ctx context.Context, execID string) (runtime.ExecSt
 
 func (d *Docker) Snapshot(ctx context.Context, id string) (runtime.SnapshotInfo, error) {
 	info, err := d.cli.ContainerInspect(ctx, id)
-	if errdefs.IsNotFound(err) {
+	if cerrdefs.IsNotFound(err) {
 		return runtime.SnapshotInfo{}, fmt.Errorf("%w: container %s", runtime.ErrNotFound, id)
 	}
 	if err != nil {
@@ -187,11 +188,11 @@ func (d *Docker) Snapshot(ctx context.Context, id string) (runtime.SnapshotInfo,
 		if err := d.cli.ContainerPause(ctx, id); err != nil {
 			return runtime.SnapshotInfo{}, translate(err)
 		}
-		// WithoutCancel is load-bearing: if the caller's context was cancelled mid-commit,
+		// WithoutCancel is load-bearing: if the caller's context was canceled mid-commit,
 		// unpausing on that same context would fail and strand the container paused forever.
 		// The unpause is also unconditional — a failed commit must not leave the sandbox frozen.
 		defer func() {
-			d.cli.ContainerUnpause(context.WithoutCancel(ctx), id)
+			_ = d.cli.ContainerUnpause(context.WithoutCancel(ctx), id)
 		}()
 	}
 
@@ -209,7 +210,7 @@ func (d *Docker) Snapshot(ctx context.Context, id string) (runtime.SnapshotInfo,
 
 func (d *Docker) DeleteSnapshot(ctx context.Context, ref string) error {
 	_, err := d.cli.ImageRemove(ctx, ref, image.RemoveOptions{})
-	if errdefs.IsNotFound(err) {
+	if cerrdefs.IsNotFound(err) {
 		return fmt.Errorf("%w: snapshot %s", runtime.ErrNotFound, ref)
 	}
 	return translate(err)
@@ -217,11 +218,11 @@ func (d *Docker) DeleteSnapshot(ctx context.Context, ref string) error {
 
 func (d *Docker) Unpause(ctx context.Context, id string) error {
 	err := d.cli.ContainerUnpause(ctx, id)
-	if errdefs.IsNotFound(err) {
+	if cerrdefs.IsNotFound(err) {
 		return fmt.Errorf("%w: container %s", runtime.ErrNotFound, id)
 	}
 	// Docker returns a conflict when the container is not paused — the state the caller wanted.
-	if errdefs.IsConflict(err) {
+	if cerrdefs.IsConflict(err) {
 		return nil
 	}
 	return translate(err)
@@ -241,17 +242,22 @@ func (d *Docker) DiskQuotaSupported(ctx context.Context) (bool, error) {
 	return diskQuotaSupported(info.Driver, status), nil
 }
 
+// The %v verbs are deliberate and errorlint is suppressed for this file because of them.
+// translate is the boundary of the runtime abstraction: it maps Docker's errors onto orcal's
+// own sentinels, and formatting the cause with %v rather than %w keeps Docker's concrete error
+// types from escaping through errors.As into packages that must not know Docker exists.
+// TestTranslateDoesNotLeakUnclassifiedDockerErrorType fails if this is "fixed" to %w.
 func translate(err error) error {
 	switch {
 	case err == nil:
 		return nil
-	case errdefs.IsNotFound(err):
+	case cerrdefs.IsNotFound(err):
 		return fmt.Errorf("%w: %v", runtime.ErrNotFound, err)
-	case errdefs.IsConflict(err):
+	case cerrdefs.IsConflict(err):
 		return fmt.Errorf("%w: %v", runtime.ErrConflict, err)
-	case errdefs.IsInvalidParameter(err):
+	case cerrdefs.IsInvalidArgument(err):
 		return fmt.Errorf("%w: %v", runtime.ErrInvalidSpec, err)
-	case client.IsErrConnectionFailed(err), errdefs.IsUnavailable(err), errors.Is(err, context.DeadlineExceeded):
+	case client.IsErrConnectionFailed(err), cerrdefs.IsUnavailable(err), errors.Is(err, context.DeadlineExceeded):
 		return fmt.Errorf("%w: %v", runtime.ErrUnavailable, err)
 	default:
 		return fmt.Errorf("runtime: docker: %v", err)

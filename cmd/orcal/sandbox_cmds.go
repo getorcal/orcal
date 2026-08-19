@@ -3,8 +3,9 @@ package main
 import (
 	"strings"
 
-	"github.com/getorcal/orcal/pkg/orcalclient"
 	"github.com/spf13/cobra"
+
+	"github.com/getorcal/orcal/pkg/orcalclient"
 )
 
 func (a *app) createCmd() *cobra.Command {
@@ -44,7 +45,7 @@ func (a *app) createCmd() *cobra.Command {
 	cmd.Flags().IntVar(&pidsLimit, "pids", 0, "maximum process count")
 	cmd.Flags().StringArrayVar(&envPairs, "env", nil, "environment variable as KEY=VALUE")
 	cmd.Flags().StringArrayVar(&labelPairs, "label", nil, "label as KEY=VALUE")
-	cmd.MarkFlagRequired("image")
+	_ = cmd.MarkFlagRequired("image")
 	return cmd
 }
 

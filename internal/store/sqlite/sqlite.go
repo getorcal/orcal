@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"sort"
 
+	_ "modernc.org/sqlite"
+
 	"github.com/getorcal/orcal/internal/exec"
 	"github.com/getorcal/orcal/internal/sandbox"
 	"github.com/getorcal/orcal/internal/snapshot"
-	_ "modernc.org/sqlite"
 )
 
 //go:embed migrations/*.sql
@@ -30,7 +31,7 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: open: %w", err)
 	}
-	// SQLite permits one writer; serialising every connection avoids SQLITE_BUSY under
+	// SQLite permits one writer; serializing every connection avoids SQLITE_BUSY under
 	// concurrent sandbox operations at the cost of throughput this daemon does not need.
 	db.SetMaxOpenConns(1)
 	s := &Store{db: db}

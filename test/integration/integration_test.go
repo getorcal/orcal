@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
+
 	"github.com/getorcal/orcal/internal/api"
 	"github.com/getorcal/orcal/internal/auth"
 	"github.com/getorcal/orcal/internal/exec"
@@ -109,8 +111,8 @@ func newEnv(t *testing.T) *env {
 				t.Errorf("cleanup: DestroySandbox(%s) error = %v", id, err)
 			}
 		}
-		for i := len(e.snapshots) - 1; i >= 0; i-- {
-			id := e.snapshots[i]
+		for _, v := range slices.Backward(e.snapshots) {
+			id := v
 			if err := e.client.DeleteSnapshot(teardownCtx, id); err != nil && !snapshotAlreadyGone(err) {
 				t.Errorf("cleanup: DeleteSnapshot(%s) error = %v", id, err)
 			}

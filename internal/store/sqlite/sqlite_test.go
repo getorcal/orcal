@@ -505,7 +505,7 @@ func TestTimestampTextFormOrdersChronologically(t *testing.T) {
 	if err := st.db.QueryRowContext(ctx, `SELECT created_at FROM sandboxes WHERE id = ?`, later.ID).Scan(&laterText); err != nil {
 		t.Fatalf("query later created_at: %v", err)
 	}
-	if !(earlierText < laterText) {
+	if earlierText >= laterText {
 		t.Errorf("stored TEXT ordering = %q, %q, want earlier < later lexicographically", earlierText, laterText)
 	}
 }

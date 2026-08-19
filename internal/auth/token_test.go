@@ -34,7 +34,7 @@ func (m *memStore) Set(ctx context.Context, key, value string) error {
 
 func TestGenerateTokenProducesDistinctHighEntropyTokens(t *testing.T) {
 	seen := map[string]bool{}
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		tok, err := auth.GenerateToken()
 		if err != nil {
 			t.Fatalf("GenerateToken() error = %v", err)

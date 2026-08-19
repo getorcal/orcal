@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -95,8 +96,7 @@ func (s *Server) handleGetExec(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleExecOutput(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	current, err := s.execs.Get(r.Context(), id)
-	if err != nil {
+	if _, err := s.execs.Get(r.Context(), id); err != nil {
 		s.writeError(w, r, err)
 		return
 	}
@@ -113,7 +113,7 @@ func (s *Server) handleExecOutput(w http.ResponseWriter, r *http.Request) {
 
 	stream, ok := newSSEWriter(w)
 	if !ok {
-		s.writeError(w, r, fmt.Errorf("streaming is not supported by this connection"))
+		s.writeError(w, r, errors.New("streaming is not supported by this connection"))
 		return
 	}
 
@@ -127,15 +127,15 @@ func (s *Server) handleExecOutput(w http.ResponseWriter, r *http.Request) {
 		}
 		offset = next
 
-		current, err = s.execs.Get(r.Context(), id)
+		current, err := s.execs.Get(r.Context(), id)
 		if err != nil {
 			return
 		}
 		if current.State != exec.StateRunning {
-			if offset, err = s.drain(stream, id, offset); err != nil {
+			if _, err := s.drain(stream, id, offset); err != nil {
 				return
 			}
-			stream.send("exit", map[string]any{
+			_ = stream.send("exit", map[string]any{
 				"state":     string(current.State),
 				"exit_code": current.ExitCode,
 				"truncated": current.Truncated,

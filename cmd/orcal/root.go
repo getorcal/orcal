@@ -1,11 +1,13 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 
-	"github.com/getorcal/orcal/pkg/orcalclient"
 	"github.com/spf13/cobra"
+
+	"github.com/getorcal/orcal/pkg/orcalclient"
 )
 
 type app struct {
@@ -69,10 +71,11 @@ func execute(args []string, stdout, stderr io.Writer) int {
 
 	root.SetArgs(args)
 	if err := root.Execute(); err != nil {
-		if code, ok := err.(execExitError); ok {
+		var code execExitError
+		if errors.As(err, &code) {
 			return int(code)
 		}
-		printError(stderr, a.settings.Output == "json", err)
+		_ = printError(stderr, a.settings.Output == "json", err)
 		if !a.entered {
 			return exitUsage
 		}

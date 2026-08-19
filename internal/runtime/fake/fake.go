@@ -7,8 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/getorcal/orcal/internal/runtime"
 	"github.com/google/uuid"
+
+	"github.com/getorcal/orcal/internal/runtime"
 )
 
 type Step struct {

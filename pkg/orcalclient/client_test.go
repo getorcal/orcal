@@ -87,7 +87,7 @@ func TestClientSurfacesAPIErrorsAsAPIError(t *testing.T) {
 	if !errors.As(err, &apiErr) {
 		t.Fatalf("error = %v, want *orcalclient.APIError", err)
 	}
-	if apiErr.StatusCode != 404 {
+	if apiErr.StatusCode != http.StatusNotFound {
 		t.Errorf("StatusCode = %d, want 404", apiErr.StatusCode)
 	}
 	if apiErr.Code != "sandbox_not_found" {
@@ -105,7 +105,7 @@ func TestClientRejectsABadToken(t *testing.T) {
 	_, err := bad.ListSandboxes(context.Background(), orcalclient.ListParams{})
 
 	var apiErr *orcalclient.APIError
-	if !errors.As(err, &apiErr) || apiErr.StatusCode != 401 {
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusUnauthorized {
 		t.Errorf("error = %v, want a 401 APIError", err)
 	}
 }

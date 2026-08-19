@@ -5,8 +5,9 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/getorcal/orcal/internal/id"
 	"github.com/google/uuid"
+
+	"github.com/getorcal/orcal/internal/id"
 )
 
 type Snapshot struct {

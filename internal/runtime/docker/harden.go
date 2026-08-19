@@ -3,6 +3,7 @@ package docker
 import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/strslice"
+
 	"github.com/getorcal/orcal/internal/runtime"
 )
 

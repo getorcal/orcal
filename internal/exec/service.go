@@ -145,7 +145,7 @@ func (s *Service) supervise(execID string, session runtime.Session) {
 	defer session.Close()
 
 	// Deliberately not the request context: the supervisor outlives the HTTP call that started
-	// it, and cancelling on client disconnect would abandon the exec with no recorded exit code.
+	// it, and canceling on client disconnect would abandon the exec with no recorded exit code.
 	ctx := context.Background()
 
 	writer, err := NewLogWriter(s.LogPath(execID), s.maxBytes)
@@ -200,7 +200,7 @@ func (s *Service) finish(ctx context.Context, execID string, exitCode *int, outp
 	e.OutputBytes = outputBytes
 	e.Truncated = truncated
 	e.FinishedAt = &finished
-	s.repo.Update(ctx, e)
+	_ = s.repo.Update(ctx, e)
 }
 
 func (s *Service) Get(ctx context.Context, id string) (*Exec, error) {
@@ -264,7 +264,7 @@ func (s *Service) appendGap(execID string) {
 		return
 	}
 	defer writer.Close()
-	writer.Append(LogGap, nil)
+	_, _ = writer.Append(LogGap, nil)
 	s.bcast.Notify(execID)
 }
 

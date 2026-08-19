@@ -1,4 +1,4 @@
-.PHONY: build test test-docker lint generate verify-generate up down logs
+.PHONY: build test test-docker lint fmt generate verify-generate up down logs
 
 build:
 	go build -o bin/orcald ./cmd/orcald
@@ -9,6 +9,12 @@ test:
 
 test-docker:
 	go test -tags docker ./test/integration/...
+
+lint:
+	golangci-lint run ./...
+
+fmt:
+	golangci-lint fmt ./...
 
 generate:
 	go generate ./...

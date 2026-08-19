@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/getorcal/orcal/internal/runtime"
 	"github.com/google/uuid"
+
+	"github.com/getorcal/orcal/internal/runtime"
 )
 
 type SandboxSource struct {

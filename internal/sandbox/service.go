@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/getorcal/orcal/internal/id"
 	"github.com/getorcal/orcal/internal/runtime"
 	"github.com/getorcal/orcal/internal/snapshot"
-	"github.com/google/uuid"
 )
 
 const runtimeName = "docker"

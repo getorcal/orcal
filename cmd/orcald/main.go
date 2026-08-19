@@ -78,7 +78,7 @@ func run() error {
 		return fmt.Errorf("read token hash: %w", err)
 	}
 	if !found {
-		return fmt.Errorf("no auth token hash persisted after Ensure")
+		return errors.New("no auth token hash persisted after Ensure")
 	}
 
 	defaults := sandbox.Resources{

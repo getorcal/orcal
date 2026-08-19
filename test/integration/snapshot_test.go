@@ -4,6 +4,7 @@ package integration
 
 import (
 	"context"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -172,7 +173,7 @@ func TestDeleteSnapshotIsRefusedWhileADescendantExists(t *testing.T) {
 
 	err = e.client.DeleteSnapshot(ctx, rootID)
 	var apiErr *orcalclient.APIError
-	if err == nil || !asAPIError(err, &apiErr) || apiErr.StatusCode != 409 {
+	if err == nil || !asAPIError(err, &apiErr) || apiErr.StatusCode != http.StatusConflict {
 		t.Fatalf("DeleteSnapshot(parent) = %v, want a 409", err)
 	}
 	if _, err := e.client.GetSnapshot(ctx, rootID); err != nil {
