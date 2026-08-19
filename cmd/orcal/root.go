@@ -67,6 +67,8 @@ func execute(args []string, stdout, stderr io.Writer) int {
 		a.snapshotCmd(),
 		a.forkCmd(),
 		a.restoreCmd(),
+		a.cpCmd(),
+		a.fileCmd(),
 	)
 
 	root.SetArgs(args)

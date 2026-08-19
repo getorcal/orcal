@@ -24,6 +24,8 @@ const (
 
 var ErrConfirmationRequired = errors.New("orcal: confirmation required")
 
+var ErrUsage = errors.New("orcal: usage error")
+
 type selfFailure struct{ err error }
 
 func (e selfFailure) Error() string { return e.err.Error() }
@@ -49,13 +51,13 @@ func exitCode(err error) int {
 	if err == nil {
 		return exitOK
 	}
-	if errors.Is(err, ErrConfirmationRequired) {
+	if errors.Is(err, ErrConfirmationRequired) || errors.Is(err, ErrUsage) {
 		return exitUsage
 	}
 	var apiErr *orcalclient.APIError
 	if errors.As(err, &apiErr) {
 		switch apiErr.Code {
-		case "sandbox_not_found", "exec_not_found", "snapshot_not_found":
+		case "sandbox_not_found", "exec_not_found", "snapshot_not_found", "path_not_found":
 			return exitNotFound
 		case "unauthorized":
 			return exitAuth

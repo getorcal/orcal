@@ -17,11 +17,13 @@ func TestExitCodeMapsAPIErrorsToStableCodes(t *testing.T) {
 		{&orcalclient.APIError{StatusCode: 404, Code: "sandbox_not_found"}, 3},
 		{&orcalclient.APIError{StatusCode: 404, Code: "exec_not_found"}, 3},
 		{&orcalclient.APIError{StatusCode: 404, Code: "snapshot_not_found"}, 3},
+		{&orcalclient.APIError{StatusCode: 404, Code: "path_not_found"}, 3},
 		{&orcalclient.APIError{StatusCode: 401, Code: "unauthorized"}, 4},
 		{&orcalclient.APIError{StatusCode: 400, Code: "invalid_request"}, 2},
 		{&orcalclient.APIError{StatusCode: 409, Code: "invalid_state"}, 1},
 		{&orcalclient.APIError{StatusCode: 503, Code: "runtime_unavailable"}, 1},
 		{fmt.Errorf("%w: restore requires confirmation", ErrConfirmationRequired), 2},
+		{fmt.Errorf("%w: cp requires exactly one remote endpoint", ErrUsage), 2},
 		{errors.New("connection refused"), 1},
 	}
 	for _, c := range cases {
