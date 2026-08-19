@@ -15,6 +15,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/client"
+
 	"github.com/getorcal/orcal/internal/apigen"
 	"github.com/getorcal/orcal/pkg/orcalclient"
 )
@@ -409,6 +412,46 @@ func TestReadRejectsDeviceFile(t *testing.T) {
 	if !asAPIError(err, &apiErr) || apiErr.StatusCode != http.StatusNotFound {
 		t.Fatalf("ReadFile(/dev/zero) error = %v, want a 404 (Docker has no archive-layer entry for a runtime device node)", err)
 	}
+}
+
+func TestFileOpsReportVanishedContainerNotMissingPath(t *testing.T) {
+	e := newEnv(t)
+	ref := e.sandbox(t, "vanished-container")
+	ctx := context.Background()
+
+	if err := e.client.WriteFile(ctx, ref, "/app/seed.txt", bytes.NewReader([]byte("x"))); err != nil {
+		t.Fatalf("seed WriteFile() error = %v", err)
+	}
+
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		t.Fatalf("docker client: %v", err)
+	}
+	defer cli.Close()
+	containerID := containerIDFor(t, cli, ref)
+	if err := cli.ContainerRemove(ctx, containerID, container.RemoveOptions{Force: true}); err != nil {
+		t.Fatalf("docker rm -f: %v", err)
+	}
+
+	assertVanishedContainerReported := func(t *testing.T, err error) {
+		t.Helper()
+		var apiErr *orcalclient.APIError
+		if !asAPIError(err, &apiErr) {
+			t.Fatalf("error = %v, want an *orcalclient.APIError", err)
+		}
+		if apiErr.Code != "invalid_state" || apiErr.StatusCode != http.StatusConflict {
+			t.Errorf("code = %q status = %d, want invalid_state/409 like any other runtime.ErrNotFound; got path_not_found if the container/path distinction was lost", apiErr.Code, apiErr.StatusCode)
+		}
+	}
+
+	_, statErr := e.client.StatFile(ctx, ref, "/app/seed.txt")
+	assertVanishedContainerReported(t, statErr)
+
+	_, readErr := e.client.ReadFile(ctx, ref, "/app/seed.txt")
+	assertVanishedContainerReported(t, readErr)
+
+	_, listErr := e.client.ListFiles(ctx, ref, "/app")
+	assertVanishedContainerReported(t, listErr)
 }
 
 func TestConcurrentUploadAndSnapshotBothSucceedWithAConsistentForkedTree(t *testing.T) {
