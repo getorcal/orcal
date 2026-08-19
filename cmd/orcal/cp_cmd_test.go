@@ -144,6 +144,83 @@ func TestCLICopyUploadTreeRecursive(t *testing.T) {
 	}
 }
 
+func TestCLICopyUploadTreeToNonexistentDestination(t *testing.T) {
+	env := newCLIEnv(t)
+	sandboxID := createSandboxForCP(t, env, "my-agent")
+	runtimeID := env.fake.IDForSandbox(sandboxID)
+	env.fake.SeedDir(runtimeID, "/app", 0o755)
+
+	dir := t.TempDir()
+	srcDir := filepath.Join(dir, "proj")
+	if err := os.MkdirAll(filepath.Join(srcDir, "sub"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "a.txt"), []byte("a"), 0o644); err != nil {
+		t.Fatalf("write a.txt: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "sub", "b.txt"), []byte("b"), 0o644); err != nil {
+		t.Fatalf("write b.txt: %v", err)
+	}
+
+	_, stderr, code := env.run(t, "cp", "-r", srcDir, "my-agent:/app/proj")
+	if code != 0 {
+		t.Fatalf("cp -r exit = %d, stderr = %s", code, stderr)
+	}
+
+	stdout, stderr, code := env.run(t, "file", "ls", "my-agent", "/app/proj")
+	if code != 0 {
+		t.Fatalf("file ls exit = %d, stderr = %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "a.txt") {
+		t.Errorf("stdout = %q, want a.txt", stdout)
+	}
+
+	stdout, stderr, code = env.run(t, "file", "ls", "my-agent", "/app/proj/sub")
+	if code != 0 {
+		t.Fatalf("file ls sub exit = %d, stderr = %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "b.txt") {
+		t.Errorf("stdout = %q, want b.txt", stdout)
+	}
+}
+
+func TestCLICopyUploadTreeRenamesAtNonexistentDestination(t *testing.T) {
+	env := newCLIEnv(t)
+	sandboxID := createSandboxForCP(t, env, "my-agent")
+	runtimeID := env.fake.IDForSandbox(sandboxID)
+	env.fake.SeedDir(runtimeID, "/app", 0o755)
+
+	dir := t.TempDir()
+	srcDir := filepath.Join(dir, "src")
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "a.txt"), []byte("a"), 0o644); err != nil {
+		t.Fatalf("write a.txt: %v", err)
+	}
+
+	_, stderr, code := env.run(t, "cp", "-r", srcDir, "my-agent:/app/renamed")
+	if code != 0 {
+		t.Fatalf("cp -r exit = %d, stderr = %s", code, stderr)
+	}
+
+	stdout, stderr, code := env.run(t, "file", "stat", "my-agent", "/app/renamed/a.txt", "--output", "json")
+	if code != 0 {
+		t.Fatalf("file stat exit = %d, stderr = %s", code, stderr)
+	}
+	var info map[string]any
+	if err := json.Unmarshal([]byte(stdout), &info); err != nil {
+		t.Fatalf("file stat output not JSON: %v\n%s", err, stdout)
+	}
+	if info["size"] != float64(len("a")) {
+		t.Errorf("size = %v, want %d", info["size"], len("a"))
+	}
+
+	if _, _, code := env.run(t, "file", "stat", "my-agent", "/app/src"); code == 0 {
+		t.Error("/app/src exists; want the upload rooted at the destination's basename, not the source's")
+	}
+}
+
 func TestCLICopyDownloadTreeRecursive(t *testing.T) {
 	env := newCLIEnv(t)
 	sandboxID := createSandboxForCP(t, env, "my-agent")

@@ -8,12 +8,14 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/getorcal/orcal/internal/files"
+	"github.com/getorcal/orcal/pkg/orcalclient"
 )
 
 type cpEndpoint struct {
@@ -95,16 +97,31 @@ func (a *app) cpUpload(ctx context.Context, localSrc string, dst cpEndpoint, rec
 }
 
 func (a *app) uploadTree(ctx context.Context, localSrc string, dst cpEndpoint) error {
+	destDir, rootName, err := a.resolveUploadDest(ctx, dst, filepath.Base(localSrc))
+	if err != nil {
+		return err
+	}
 	pr, pw := io.Pipe()
 	go func() {
-		pw.CloseWithError(buildLocalArchive(pw, localSrc))
+		pw.CloseWithError(buildLocalArchive(pw, localSrc, rootName))
 	}()
-	return a.client.UploadArchive(ctx, dst.ref, dst.path, pr)
+	return a.client.UploadArchive(ctx, dst.ref, destDir, pr)
 }
 
-func buildLocalArchive(w io.Writer, srcPath string) error {
+func (a *app) resolveUploadDest(ctx context.Context, dst cpEndpoint, srcBase string) (destDir, rootName string, err error) {
+	_, statErr := a.client.StatFile(ctx, dst.ref, dst.path)
+	if statErr == nil {
+		return dst.path, srcBase, nil
+	}
+	var apiErr *orcalclient.APIError
+	if errors.As(statErr, &apiErr) && apiErr.Code == "path_not_found" {
+		return path.Dir(dst.path), path.Base(dst.path), nil
+	}
+	return "", "", statErr
+}
+
+func buildLocalArchive(w io.Writer, srcPath, rootName string) error {
 	tw := tar.NewWriter(w)
-	base := filepath.Base(srcPath)
 	err := filepath.WalkDir(srcPath, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -113,9 +130,9 @@ func buildLocalArchive(w io.Writer, srcPath string) error {
 		if err != nil {
 			return err
 		}
-		name := base
+		name := rootName
 		if rel != "." {
-			name = base + "/" + filepath.ToSlash(rel)
+			name = rootName + "/" + filepath.ToSlash(rel)
 		}
 		info, err := d.Info()
 		if err != nil {
