@@ -76,6 +76,7 @@ func classify(err error) (int, ErrorCode) {
 		return http.StatusConflict, CodeInvalidState
 	case errors.Is(err, sandbox.ErrInvalidName), errors.Is(err, sandbox.ErrNameLooksLikeID),
 		errors.Is(err, sandbox.ErrInvalidImage), errors.Is(err, sandbox.ErrInvalidResources),
+		errors.Is(err, sandbox.ErrInvalidNetwork),
 		errors.Is(err, ErrInvalidRequest), errors.Is(err, runtime.ErrInvalidSpec):
 		return http.StatusBadRequest, CodeInvalidRequest
 	case errors.Is(err, sandbox.ErrResourceExhausted):

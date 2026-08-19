@@ -129,6 +129,7 @@ func renderSandboxInspect(w io.Writer, format string, s *apigen.Sandbox) error {
 	fmt.Fprintf(tw, "image:\t%s\n", s.Image)
 	fmt.Fprintf(tw, "state:\t%s\n", s.State)
 	fmt.Fprintf(tw, "runtime:\t%s\n", s.Runtime)
+	fmt.Fprintf(tw, "network:\t%s\n", s.Network)
 	fmt.Fprintf(tw, "cpu_millis:\t%d\n", s.Resources.CpuMillis)
 	fmt.Fprintf(tw, "memory_bytes:\t%d\n", s.Resources.MemoryBytes)
 	fmt.Fprintf(tw, "pids_limit:\t%d\n", s.Resources.PidsLimit)

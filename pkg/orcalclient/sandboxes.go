@@ -15,6 +15,7 @@ type CreateSandboxParams struct {
 	CPUMillis   int               `json:"cpu_millis,omitempty"`
 	MemoryBytes int64             `json:"memory_bytes,omitempty"`
 	PidsLimit   int               `json:"pids_limit,omitempty"`
+	Network     string            `json:"network,omitempty"`
 	Env         map[string]string `json:"env,omitempty"`
 	Labels      map[string]string `json:"labels,omitempty"`
 }

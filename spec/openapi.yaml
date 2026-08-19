@@ -455,9 +455,13 @@ components:
         cpu_millis: { type: integer, minimum: 1 }
         memory_bytes: { type: integer, format: int64, minimum: 1 }
         pids_limit: { type: integer, minimum: 1 }
+    Network:
+      type: string
+      enum: [full, none]
+      description: full allows egress; none attaches an internal network with no route off the bridge
     Sandbox:
       type: object
-      required: [id, image, state, runtime, resources, created_at, updated_at]
+      required: [id, image, state, runtime, resources, network, created_at, updated_at]
       properties:
         id: { type: string }
         name: { type: string }
@@ -467,6 +471,7 @@ components:
           enum: [creating, running, stopped, destroying, destroyed, error]
         runtime: { type: string }
         resources: { $ref: "#/components/schemas/Resources" }
+        network: { $ref: "#/components/schemas/Network" }
         env:
           type: object
           additionalProperties: { type: string }
@@ -494,6 +499,7 @@ components:
         cpu_millis: { type: integer, minimum: 1 }
         memory_bytes: { type: integer, format: int64, minimum: 1 }
         pids_limit: { type: integer, minimum: 1 }
+        network: { $ref: "#/components/schemas/Network" }
         env:
           type: object
           additionalProperties: { type: string }
@@ -556,6 +562,7 @@ components:
           type: integer
           format: int64
           description: Apparent image size including shared layers, not incremental disk use
+        network: { $ref: "#/components/schemas/Network" }
         created_at: { type: string, format: date-time }
     SnapshotList:
       type: object

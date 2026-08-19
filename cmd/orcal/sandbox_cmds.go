@@ -15,6 +15,7 @@ func (a *app) createCmd() *cobra.Command {
 		cpuMillis   int
 		memoryBytes int64
 		pidsLimit   int
+		network     string
 		envPairs    []string
 		labelPairs  []string
 	)
@@ -28,6 +29,7 @@ func (a *app) createCmd() *cobra.Command {
 				CPUMillis:   cpuMillis,
 				MemoryBytes: memoryBytes,
 				PidsLimit:   pidsLimit,
+				Network:     network,
 				Env:         parsePairs(envPairs),
 				Labels:      parsePairs(labelPairs),
 			}
@@ -43,6 +45,7 @@ func (a *app) createCmd() *cobra.Command {
 	cmd.Flags().IntVar(&cpuMillis, "cpu", 0, "CPU limit in millicores")
 	cmd.Flags().Int64Var(&memoryBytes, "memory", 0, "memory limit in bytes")
 	cmd.Flags().IntVar(&pidsLimit, "pids", 0, "maximum process count")
+	cmd.Flags().StringVar(&network, "network", "", "network mode: full or none")
 	cmd.Flags().StringArrayVar(&envPairs, "env", nil, "environment variable as KEY=VALUE")
 	cmd.Flags().StringArrayVar(&labelPairs, "label", nil, "label as KEY=VALUE")
 	_ = cmd.MarkFlagRequired("image")

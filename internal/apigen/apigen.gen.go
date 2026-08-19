@@ -79,6 +79,24 @@ func (e ExecState) Valid() bool {
 	}
 }
 
+// Defines values for Network.
+const (
+	Full Network = "full"
+	None Network = "none"
+)
+
+// Valid indicates whether the value is a known member of the Network enum.
+func (e Network) Valid() bool {
+	switch e {
+	case Full:
+		return true
+	case None:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SandboxState.
 const (
 	SandboxStateCreating   SandboxState = "creating"
@@ -167,8 +185,11 @@ type CreateSandboxRequest struct {
 	Labels      *map[string]string `json:"labels,omitempty"`
 	MemoryBytes *int64             `json:"memory_bytes,omitempty"`
 	Name        *string            `json:"name,omitempty"`
-	PidsLimit   *int               `json:"pids_limit,omitempty"`
-	Snapshot    *string            `json:"snapshot,omitempty"`
+
+	// Network full allows egress; none attaches an internal network with no route off the bridge
+	Network   *Network `json:"network,omitempty"`
+	PidsLimit *int     `json:"pids_limit,omitempty"`
+	Snapshot  *string  `json:"snapshot,omitempty"`
 }
 
 // CreateSnapshotRequest defines model for CreateSnapshotRequest.
@@ -258,6 +279,9 @@ type FileList struct {
 	Truncated bool `json:"truncated"`
 }
 
+// Network full allows egress; none attaches an internal network with no route off the bridge
+type Network string
+
 // Resources defines model for Resources.
 type Resources struct {
 	CpuMillis   int   `json:"cpu_millis"`
@@ -272,17 +296,20 @@ type RestoreRequest struct {
 
 // Sandbox defines model for Sandbox.
 type Sandbox struct {
-	CreatedAt        time.Time          `json:"created_at"`
-	Env              *map[string]string `json:"env,omitempty"`
-	Id               string             `json:"id"`
-	Image            string             `json:"image"`
-	Labels           *map[string]string `json:"labels,omitempty"`
-	Name             *string            `json:"name,omitempty"`
-	ParentSnapshotId *string            `json:"parent_snapshot_id,omitempty"`
-	Resources        Resources          `json:"resources"`
-	Runtime          string             `json:"runtime"`
-	State            SandboxState       `json:"state"`
-	UpdatedAt        time.Time          `json:"updated_at"`
+	CreatedAt time.Time          `json:"created_at"`
+	Env       *map[string]string `json:"env,omitempty"`
+	Id        string             `json:"id"`
+	Image     string             `json:"image"`
+	Labels    *map[string]string `json:"labels,omitempty"`
+	Name      *string            `json:"name,omitempty"`
+
+	// Network full allows egress; none attaches an internal network with no route off the bridge
+	Network          Network      `json:"network"`
+	ParentSnapshotId *string      `json:"parent_snapshot_id,omitempty"`
+	Resources        Resources    `json:"resources"`
+	Runtime          string       `json:"runtime"`
+	State            SandboxState `json:"state"`
+	UpdatedAt        time.Time    `json:"updated_at"`
 }
 
 // SandboxState defines model for Sandbox.State.
@@ -299,13 +326,16 @@ type Scope string
 
 // Snapshot defines model for Snapshot.
 type Snapshot struct {
-	CreatedAt  time.Time `json:"created_at"`
-	Id         string    `json:"id"`
-	Image      string    `json:"image"`
-	Name       *string   `json:"name,omitempty"`
-	ParentId   *string   `json:"parent_id,omitempty"`
-	RuntimeRef string    `json:"runtime_ref"`
-	SandboxId  string    `json:"sandbox_id"`
+	CreatedAt time.Time `json:"created_at"`
+	Id        string    `json:"id"`
+	Image     string    `json:"image"`
+	Name      *string   `json:"name,omitempty"`
+
+	// Network full allows egress; none attaches an internal network with no route off the bridge
+	Network    *Network `json:"network,omitempty"`
+	ParentId   *string  `json:"parent_id,omitempty"`
+	RuntimeRef string   `json:"runtime_ref"`
+	SandboxId  string   `json:"sandbox_id"`
 
 	// SizeBytes Apparent image size including shared layers, not incremental disk use
 	SizeBytes int64 `json:"size_bytes"`

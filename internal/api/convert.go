@@ -26,6 +26,7 @@ func toAPISandbox(s *sandbox.Sandbox) apigen.Sandbox {
 			MemoryBytes: s.Resources.MemoryBytes,
 			PidsLimit:   s.Resources.PidsLimit,
 		},
+		Network:          apigen.Network(s.Network),
 		ParentSnapshotId: s.ParentSnapshotID,
 	}
 	if s.Name != "" {
@@ -52,6 +53,9 @@ func toAPISnapshot(s *snapshot.Snapshot) apigen.Snapshot {
 	}
 	if s.Name != "" {
 		out.Name = ptr(s.Name)
+	}
+	if s.Network != "" {
+		out.Network = ptr(apigen.Network(s.Network))
 	}
 	return out
 }

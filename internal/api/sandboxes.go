@@ -47,6 +47,9 @@ func (s *Server) handleCreateSandbox(w http.ResponseWriter, r *http.Request) {
 	if req.PidsLimit != nil {
 		opts.Resources.PidsLimit = *req.PidsLimit
 	}
+	if req.Network != nil {
+		opts.Network = sandbox.Network(*req.Network)
+	}
 
 	var created *sandbox.Sandbox
 	var err error
