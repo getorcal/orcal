@@ -21,6 +21,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+          # Runners pre-cache a Go patch that can lag the newest release (1.25.12 vs
+          # 1.25.13), which is enough to fail the vuln gate on already-fixed advisories.
+          check-latest: true
           cache: true
       - run: go vet ./...
       - run: go test ./... -count=1
@@ -41,6 +44,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+          # Runners pre-cache a Go patch that can lag the newest release (1.25.12 vs
+          # 1.25.13), which is enough to fail the vuln gate on already-fixed advisories.
+          check-latest: true
           cache: true
       - name: Build
         env:

@@ -28,6 +28,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+          # Runners pre-cache a Go patch that can lag the newest release (1.25.12 vs
+          # 1.25.13), which is enough to fail the vuln gate on already-fixed advisories.
+          check-latest: true
           cache: true
       - name: Install golangci-lint
         # Pinned and module-independent, mirroring how oapi-codegen is pinned in generate.go.
@@ -47,6 +50,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+          # Runners pre-cache a Go patch that can lag the newest release (1.25.12 vs
+          # 1.25.13), which is enough to fail the vuln gate on already-fixed advisories.
+          check-latest: true
           cache: true
       - name: Generated code is current
         run: make verify-generate
@@ -74,6 +80,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
+          # Runners pre-cache a Go patch that can lag the newest release (1.25.12 vs
+          # 1.25.13), which is enough to fail the vuln gate on already-fixed advisories.
+          check-latest: true
           cache: true
       - run: go vet ./...
       - run: go test ./... -count=1
@@ -87,6 +96,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+          # Runners pre-cache a Go patch that can lag the newest release (1.25.12 vs
+          # 1.25.13), which is enough to fail the vuln gate on already-fixed advisories.
+          check-latest: true
           cache: true
       - run: docker version
       - name: Docker integration suite
@@ -142,12 +154,18 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+          # Runners pre-cache a Go patch that can lag the newest release (1.25.12 vs
+          # 1.25.13), which is enough to fail the vuln gate on already-fixed advisories.
+          check-latest: true
           cache: true
       - name: govulncheck
         # Unpinned on purpose: a vulnerability scanner is only useful at its newest.
         # Only findings reachable from orcal's own code gate the build; imported-but-uncalled
         # ones do not. Accepted findings live in .github/vuln-allowlist.txt with reasons.
         run: |
+          # Logged because which patch release ran is the first thing you need when a stdlib
+          # advisory shows up here.
+          go version
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck -format json ./... > vuln.json || true
 
