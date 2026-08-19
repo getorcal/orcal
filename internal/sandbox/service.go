@@ -263,6 +263,46 @@ func (s *Service) RuntimeID(ctx context.Context, sandboxID string) (string, erro
 	return sb.RuntimeID, nil
 }
 
+func (s *Service) RuntimeIDFor(ctx context.Context, ref string) (string, error) {
+	sb, err := s.Get(ctx, ref)
+	if err != nil {
+		return "", err
+	}
+	if err := fileOperable(sb); err != nil {
+		return "", err
+	}
+	return sb.RuntimeID, nil
+}
+
+func (s *Service) WithLockedRuntimeID(ctx context.Context, ref string, fn func(runtimeID string) error) error {
+	sb, err := s.Get(ctx, ref)
+	if err != nil {
+		return err
+	}
+
+	unlock := s.locks.lock(sb.ID)
+	defer unlock()
+
+	sb, err = s.repo.Get(ctx, sb.ID)
+	if err != nil {
+		return err
+	}
+	if err := fileOperable(sb); err != nil {
+		return err
+	}
+	return fn(sb.RuntimeID)
+}
+
+func fileOperable(sb *Sandbox) error {
+	if sb.State != StateRunning && sb.State != StateStopped {
+		return fmt.Errorf("%w: cannot access files on a sandbox that is %s", ErrInvalidState, sb.State)
+	}
+	if sb.RuntimeID == "" {
+		return fmt.Errorf("%w: sandbox has no container", ErrInvalidState)
+	}
+	return nil
+}
+
 // WithSnapshotSource runs fn while holding the per-sandbox lock, so the Docker commit and the
 // snapshot row are written atomically with respect to any other mutation of this sandbox.
 // A plain getter would let a Destroy land between reading the runtime ID and committing it.
