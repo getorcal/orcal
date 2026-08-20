@@ -141,8 +141,29 @@ jobs:
           echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/gvisor-archive-keyring.gpg] https://storage.googleapis.com/gvisor/releases release main" | sudo tee /etc/apt/sources.list.d/gvisor.list > /dev/null
           sudo apt-get update && sudo apt-get install -y runsc
           sudo runsc install
+
+          # orcald refuses to start against a runsc without these; see docs/SECURITY.md.
+          # --overlay2=none: gVisor's default self-backed root overlay discards writes before
+          # ContainerCommit can see them, so snapshots would silently lose all data.
+          # --network=host: gVisor's default netstack gets no route on orcal's isolated bridge
+          # network, so sandboxes would have no network.
+          sudo jq '.runtimes.runsc.runtimeArgs = ["--overlay2=none", "--network=host"]' /etc/docker/daemon.json \
+            | sudo tee /etc/docker/daemon.json.tmp > /dev/null
+          sudo mv /etc/docker/daemon.json.tmp /etc/docker/daemon.json
+
           sudo systemctl restart docker
           docker info --format '{{.Runtimes}}'
+
+          args=$(docker info --format '{{json .Runtimes}}' | jq -r '.runsc.runtimeArgs // [] | join(",")')
+          echo "runsc runtimeArgs: $args"
+          case ",$args," in
+            *,--overlay2=none,*) ;;
+            *) echo "::error::daemon.json edit did not take effect: runsc is missing --overlay2=none"; exit 1 ;;
+          esac
+          case ",$args," in
+            *,--network=host,*) ;;
+            *) echo "::error::daemon.json edit did not take effect: runsc is missing --network=host"; exit 1 ;;
+          esac
       - name: gVisor suite
         env:
           ORCAL_CONTAINER_RUNTIME: runsc

@@ -64,13 +64,15 @@ func TestInspectReportsPausedDistinctly(t *testing.T) {
 type fakeInfo struct {
 	Default   string
 	Available []string
+	Args      map[string][]string
 }
 
 func newFakeDocker(t *testing.T, fi fakeInfo) *Docker {
 	t.Helper()
 	runtimes := make(map[string]system.RuntimeWithStatus, len(fi.Available))
 	for _, name := range fi.Available {
-		runtimes[name] = system.RuntimeWithStatus{}
+		rt := system.Runtime{Args: fi.Args[name]}
+		runtimes[name] = system.RuntimeWithStatus{Runtime: rt}
 	}
 	return &Docker{cli: fakeDockerClient{
 		info: system.Info{DefaultRuntime: fi.Default, Runtimes: runtimes},

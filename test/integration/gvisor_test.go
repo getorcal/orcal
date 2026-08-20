@@ -161,15 +161,15 @@ func TestProductWorksEndToEndUnderGvisor(t *testing.T) {
 	ctx := context.Background()
 
 	ref := e.sandbox(t, "gvisor-lifecycle")
-	if _, code := e.runToCompletion(t, ref, "sh", "-c", "echo original > /tmp/marker"); code != 0 {
+	if _, code := e.runToCompletion(t, ref, "sh", "-c", "mkdir -p /app && echo original > /app/marker"); code != 0 {
 		t.Fatalf("seed marker exit = %d, want 0", code)
 	}
 
 	content := []byte("hello under gvisor\n")
-	if err := e.client.WriteFile(ctx, ref, "/tmp/hello.txt", bytes.NewReader(content)); err != nil {
+	if err := e.client.WriteFile(ctx, ref, "/app/hello.txt", bytes.NewReader(content)); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	rc, err := e.client.ReadFile(ctx, ref, "/tmp/hello.txt")
+	rc, err := e.client.ReadFile(ctx, ref, "/app/hello.txt")
 	if err != nil {
 		t.Fatalf("ReadFile() error = %v", err)
 	}
@@ -182,11 +182,11 @@ func TestProductWorksEndToEndUnderGvisor(t *testing.T) {
 		t.Errorf("content = %q, want %q", got, content)
 	}
 
-	archiveRC, err := e.client.DownloadArchive(ctx, ref, "/tmp")
+	archiveRC, err := e.client.DownloadArchive(ctx, ref, "/app")
 	if err != nil {
 		t.Fatalf("DownloadArchive() error = %v", err)
 	}
-	if !archiveContains(t, archiveRC, "tmp/hello.txt") {
+	if !archiveContains(t, archiveRC, "app/hello.txt") {
 		t.Error("downloaded archive is missing hello.txt")
 	}
 
@@ -200,7 +200,7 @@ func TestProductWorksEndToEndUnderGvisor(t *testing.T) {
 	if forked.OciRuntime == nil || *forked.OciRuntime != "runsc" {
 		t.Errorf("forked oci_runtime = %v, want runsc", forked.OciRuntime)
 	}
-	if out, code := e.runToCompletion(t, forked.Id, "cat", "/tmp/marker"); code != 0 || strings.TrimSpace(out) != "original" {
+	if out, code := e.runToCompletion(t, forked.Id, "cat", "/app/marker"); code != 0 || strings.TrimSpace(out) != "original" {
 		t.Errorf("fork marker = %q code=%d, want original/0", out, code)
 	}
 
@@ -211,7 +211,7 @@ func TestProductWorksEndToEndUnderGvisor(t *testing.T) {
 	if restored.OciRuntime == nil || *restored.OciRuntime != "runsc" {
 		t.Errorf("restored oci_runtime = %v, want runsc", restored.OciRuntime)
 	}
-	if out, code := e.runToCompletion(t, ref, "cat", "/tmp/marker"); code != 0 || strings.TrimSpace(out) != "original" {
+	if out, code := e.runToCompletion(t, ref, "cat", "/app/marker"); code != 0 || strings.TrimSpace(out) != "original" {
 		t.Errorf("restored marker = %q code=%d, want original/0", out, code)
 	}
 }

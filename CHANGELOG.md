@@ -70,7 +70,10 @@ Nothing has been released yet. Everything below is on `main` and unversioned.
   sandbox under gVisor instead of the default container runtime, trading some
   compatibility and performance for a smaller kernel attack surface. The choice
   is made once, by the operator, for the whole deployment — a caller can never
-  request weaker isolation than what was configured.
+  request weaker isolation than what was configured. gVisor also needs specific
+  Docker daemon configuration to work correctly with snapshots and networking;
+  `orcald` checks for it at startup and refuses to run rather than starting in a
+  broken state.
 - **Audit log:** Every action that changes state, and every request denied for
   being unauthenticated or out of scope, is recorded with who did it, what they
   did, what it affected, and the outcome. The log is queryable and filterable

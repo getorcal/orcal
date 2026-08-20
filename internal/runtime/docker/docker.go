@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -60,15 +61,20 @@ func New(host string) (*Docker, error) {
 	return &Docker{cli: cli}, nil
 }
 
+const (
+	runscRuntimeName    = "runsc"
+	runscOverlayArg     = "--overlay2=none"
+	runscHostNetworkArg = "--network=host"
+)
+
 func (d *Docker) ResolveRuntime(ctx context.Context, configured string) (string, error) {
 	info, err := d.cli.Info(ctx)
 	if err != nil {
 		return "", translate(err)
 	}
 	if configured == "" {
-		return info.DefaultRuntime, nil
-	}
-	if _, ok := info.Runtimes[configured]; !ok {
+		configured = info.DefaultRuntime
+	} else if _, ok := info.Runtimes[configured]; !ok {
 		available := make([]string, 0, len(info.Runtimes))
 		for name := range info.Runtimes {
 			available = append(available, name)
@@ -77,7 +83,36 @@ func (d *Docker) ResolveRuntime(ctx context.Context, configured string) (string,
 		return "", fmt.Errorf("%w: runtime %q is not registered with this daemon; available: %s",
 			runtime.ErrInvalidSpec, configured, strings.Join(available, ", "))
 	}
+	if configured == runscRuntimeName {
+		if err := checkRunscRuntimeArgs(info.Runtimes[configured].Args); err != nil {
+			return "", err
+		}
+	}
 	return configured, nil
+}
+
+// gVisor's defaults are unsafe for orcal's use unconditionally, not just when hardening or
+// snapshots happen to be exercised: the self-backed root overlay silently discards writes
+// before ContainerCommit can see them, and the default netstack gets no route on orcal's
+// isolated bridge network. Both were confirmed against a live daemon; see docs/SECURITY.md.
+func checkRunscRuntimeArgs(args []string) error {
+	var missing []string
+	if !slices.Contains(args, runscOverlayArg) {
+		missing = append(missing, runscOverlayArg+
+			" (without it, gVisor's self-backed root overlay discards writes before"+
+			" ContainerCommit can see them, so snapshots silently lose all data)")
+	}
+	if !slices.Contains(args, runscHostNetworkArg) {
+		missing = append(missing, runscHostNetworkArg+
+			" (without it, a runsc container on orcal's isolated bridge network gets"+
+			" no default route, so sandboxes have no network)")
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	return fmt.Errorf("%w: the runsc runtime is missing required runtimeArgs: %s;"+
+		" add the missing flag(s) to the runsc entry's runtimeArgs in /etc/docker/daemon.json and restart Docker",
+		runtime.ErrInvalidSpec, strings.Join(missing, "; "))
 }
 
 func (d *Docker) EnsureNetwork(ctx context.Context, name string, internal bool) error {

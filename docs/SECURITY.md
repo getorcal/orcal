@@ -100,6 +100,52 @@ Three practical consequences follow from that:
 - gVisor is off by default. Selecting it requires the operator to have installed `runsc` on the
   host and registered it with the Docker daemon; Orcal does not bundle or install it.
 
+### gVisor requires two daemon-level flags, or `orcald` refuses to start
+
+gVisor's defaults are unsafe for how Orcal uses a sandbox, and `orcald` will not boot against a
+`runsc` runtime that lacks either of the two `runtimeArgs` below:
+
+- **`--overlay2=none`.** Without it, gVisor's default self-backed root overlay discards a
+  container's writes before `docker commit` can see them, so a snapshot taken under the default
+  configuration silently captures none of the sandbox's changes — the snapshot API reports
+  success and produces an image with no data in it.
+- **`--network=host`.** Without it, gVisor's default netstack gets no route on the isolated
+  bridge network Orcal creates (the same one that carries `enable_icc=false`), so a sandbox has
+  no network at all: no DNS, no outbound connections, nothing.
+
+Both are set on the `runsc` entry in `/etc/docker/daemon.json`:
+
+```json
+{
+  "runtimes": {
+    "runsc": {
+      "path": "/usr/bin/runsc",
+      "runtimeArgs": ["--overlay2=none", "--network=host"]
+    }
+  }
+}
+```
+
+At startup, `orcald` reads the daemon's own reported runtime configuration — a cheap
+configuration check, not a container round trip — and if the resolved runtime is `runsc` and
+either flag is absent, it refuses to start and names exactly which one is missing. A daemon that
+boots and then silently loses every snapshot, or silently strands every sandbox with no network,
+is a worse failure than one that never starts at all.
+
+`--network=host` is a real trade, not a free fix, and it is worth stating plainly: it means
+gVisor is no longer sandboxing the network stack. The container gets no network namespace or
+netstack of its own; networking is handled by the host kernel exactly as it would be under
+`runc`. gVisor's syscall-interception boundary, under this configuration, covers every syscall
+category except networking.
+
+### `/tmp` never survives a snapshot under gVisor
+
+Independent of either flag above, gVisor always mounts a fresh `tmpfs` over `/tmp` inside every
+container it starts. This is inherent to gVisor's default filesystem plumbing, not something
+`--overlay2=none` changes: nothing written to `/tmp` survives a snapshot, a fork, or a restore,
+in any `runsc` configuration. Anything a snapshot needs to capture — application state, files a
+forked or restored sandbox should inherit — must live outside `/tmp`.
+
 The runtime is selected once, at `orcald` startup, from `ORCAL_CONTAINER_RUNTIME`. It is not a
 per-request or per-sandbox setting: there is no field on the create-sandbox API that lets a
 caller pick a runtime, and the response's read-only `oci_runtime` field only reports what the
@@ -211,7 +257,10 @@ shrinks the kernel surface an escape would need to target. It raises the bar rel
 but it is still process-level isolation sharing one kernel underneath the sentry, still subject
 to the same incomplete-syscall-surface and performance caveats described above, and still not a
 substitute for the hardware-enforced boundary a virtual machine provides. Treat it as a stronger
-container, not as VM-grade isolation.
+container, not as VM-grade isolation. Networking is a specific, deliberate exception to all of
+this: Orcal's required `--network=host` configuration (see above) means the sentry does not
+intercept network syscalls at all, so gVisor's boundary here covers everything except
+networking, which runs exactly as it does under `runc`.
 
 Whichever runtime is configured, the Docker-socket gap above applies identically: neither
 runtime changes what holding `orcald`'s socket means.
