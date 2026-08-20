@@ -53,6 +53,7 @@ func removeTestNetwork() {
 	}
 	defer cli.Close()
 	cli.NetworkRemove(context.Background(), testNetwork)
+	cli.NetworkRemove(context.Background(), testNetwork+"-isolated")
 }
 
 type env struct {
@@ -79,6 +80,9 @@ func newEnv(t *testing.T) *env {
 		t.Skipf("no Docker daemon available: %v", err)
 	}
 	if err := rt.EnsureNetwork(ctx, testNetwork, false); err != nil {
+		t.Skipf("no Docker daemon available: %v", err)
+	}
+	if err := rt.EnsureNetwork(ctx, testNetwork+"-isolated", true); err != nil {
 		t.Skipf("no Docker daemon available: %v", err)
 	}
 

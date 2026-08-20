@@ -53,9 +53,26 @@ Nothing has been released yet. Everything below is on `main` and unversioned.
   runs with `no-new-privileges`, keeps Docker's default seccomp profile, disables
   swap, mounts nothing from the host, publishes no ports, and cannot reach other
   sandboxes over the network.
-- **Mandatory authentication:** Every endpoint except health and version requires
-  a bearer token. There is no mode that disables it. A token is generated on
+- **Scoped, revocable tokens:** Every endpoint except health and version requires
+  a bearer token, and there is no mode that disables it. Tokens are scoped to the
+  specific operations they grant — reading or managing sandboxes, running
+  commands, transferring files, managing snapshots, reading the audit log, and
+  managing other tokens are each a separate grant rather than implied by one
+  another — and can be listed and revoked at any time. A token is generated on
   first start and printed once. The default bind address is loopback.
+- **Per-sandbox network mode:** A sandbox is created with network mode `full`
+  (the default, with normal outbound access) or `none`, which denies it a route
+  to the internet for its whole lifetime, including every fork or restore made
+  from it. The mode is fixed at creation and cannot be changed afterward.
+- **Optional gVisor runtime:** An operator can configure `orcald` to run every
+  sandbox under gVisor instead of the default container runtime, trading some
+  compatibility and performance for a smaller kernel attack surface. The choice
+  is made once, by the operator, for the whole deployment — a caller can never
+  request weaker isolation than what was configured.
+- **Audit log:** Every action that changes state, and every request denied for
+  being unauthenticated or out of scope, is recorded with who did it, what they
+  did, what it affected, and the outcome. The log is queryable and filterable
+  over the API.
 - **Path validation on transfers:** Archives are rejected when an entry would
   escape the destination through traversal, an absolute path, or a symlink or
   hardlink target. Setuid and setgid bits are stripped from uploads.
@@ -66,7 +83,8 @@ Nothing has been released yet. Everything below is on `main` and unversioned.
   and there is no multi-node support.
 - A snapshot captures the filesystem only. Process and memory state are not
   preserved, so a fork resumes from disk rather than mid-execution.
-- One token grants full access to every operation. Scoped tokens, per-sandbox
-  network policy, and an audit trail are in progress.
+- A token's scope limits which operations it may perform, not which sandboxes it
+  may perform them on. A token that can manage sandboxes can manage every
+  sandbox on the host, not only ones it created.
 - The published container image runs as root, and the daemon holds the Docker
   socket, which is root-equivalent on the host.
