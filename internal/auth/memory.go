@@ -20,6 +20,9 @@ func (m *MemoryRepo) Create(_ context.Context, t *Token) error {
 		if existing.Name == t.Name && existing.RevokedAt == nil {
 			return ErrNameTaken
 		}
+		if existing.Hash == t.Hash {
+			return ErrHashTaken
+		}
 	}
 	clone := *t
 	m.tokens = append(m.tokens, &clone)

@@ -62,8 +62,10 @@ Nothing has been released yet. Everything below is on `main` and unversioned.
   first start and printed once. The default bind address is loopback.
 - **Per-sandbox network mode:** A sandbox is created with network mode `full`
   (the default, with normal outbound access) or `none`, which denies it a route
-  to the internet for its whole lifetime, including every fork or restore made
-  from it. The mode is fixed at creation and cannot be changed afterward.
+  to the internet. The mode is fixed at creation and cannot be changed
+  afterward. Restoring a sandbox always keeps its own mode. Forking a sandbox
+  from a snapshot inherits the snapshot's mode by default, but an explicit
+  `network` on the fork request overrides it.
 - **Optional gVisor runtime:** An operator can configure `orcald` to run every
   sandbox under gVisor instead of the default container runtime, trading some
   compatibility and performance for a smaller kernel attack surface. The choice

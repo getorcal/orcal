@@ -157,6 +157,28 @@ func TestLoadAuditRetentionDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsAnAuditRetentionThatWouldOverflowDuration(t *testing.T) {
+	for _, days := range []string{"36501", "200000", "213504"} {
+		t.Run(days, func(t *testing.T) {
+			t.Setenv("ORCAL_AUDIT_RETENTION_DAYS", days)
+			if _, err := Load(); err == nil {
+				t.Errorf("Load() error = nil, want a validation error for %s days", days)
+			}
+		})
+	}
+}
+
+func TestLoadAcceptsTheMaximumAuditRetention(t *testing.T) {
+	t.Setenv("ORCAL_AUDIT_RETENTION_DAYS", "36500")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.AuditRetentionDays != 36500 {
+		t.Errorf("AuditRetentionDays = %d, want 36500", cfg.AuditRetentionDays)
+	}
+}
+
 func TestLoadAuditRetentionOverrides(t *testing.T) {
 	t.Setenv("ORCAL_AUDIT_RETENTION_DAYS", "30")
 	t.Setenv("ORCAL_AUDIT_MAX_EVENTS", "500")

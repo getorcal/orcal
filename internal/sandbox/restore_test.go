@@ -27,13 +27,14 @@ func (r *hookRepo) Get(ctx context.Context, id string) (*sandbox.Sandbox, error)
 }
 
 type stubSnapshots struct {
-	ref string
-	id  string
-	err error
+	ref     string
+	id      string
+	network string
+	err     error
 }
 
 func (s stubSnapshots) Resolve(ctx context.Context, ref string) (snapshot.Resolved, error) {
-	return snapshot.Resolved{RuntimeRef: s.ref, ID: s.id}, s.err
+	return snapshot.Resolved{RuntimeRef: s.ref, ID: s.id, Network: s.network}, s.err
 }
 
 func TestForkCreatesANewSandboxFromTheSnapshotRef(t *testing.T) {

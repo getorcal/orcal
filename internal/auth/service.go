@@ -102,6 +102,10 @@ func (s *Service) Revoke(ctx context.Context, id string) error {
 	return s.repo.Update(ctx, tok)
 }
 
+// Authenticate reports which sentinel a rejection wraps beyond ErrUnauthorized, so callers can
+// annotate an audit event with the specific reason without changing what the caller returns to
+// the client. On a revoked or expired token it also returns the resolved *Token alongside the
+// error, so a caller can record that token's own prefix rather than the credential it was given.
 func (s *Service) Authenticate(ctx context.Context, plaintext string) (*Token, error) {
 	if plaintext == "" {
 		return nil, ErrUnauthorized
@@ -109,14 +113,17 @@ func (s *Service) Authenticate(ctx context.Context, plaintext string) (*Token, e
 	tok, err := s.repo.GetByHash(ctx, HashToken(plaintext))
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			return nil, ErrUnauthorized
+			return nil, fmt.Errorf("%w: %w", ErrUnauthorized, ErrUnknownToken)
 		}
 		return nil, err
 	}
 
 	now := s.now()
-	if !tok.Live(now) {
-		return nil, ErrUnauthorized
+	if tok.RevokedAt != nil {
+		return tok, fmt.Errorf("%w: %w", ErrUnauthorized, ErrTokenRevoked)
+	}
+	if tok.ExpiresAt != nil && !tok.ExpiresAt.After(now) {
+		return tok, fmt.Errorf("%w: %w", ErrUnauthorized, ErrTokenExpired)
 	}
 	if tok.LastUsedAt == nil || now.Sub(*tok.LastUsedAt) >= lastUsedInterval {
 		if err := s.repo.TouchLastUsed(ctx, tok.ID, now); err != nil {

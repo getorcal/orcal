@@ -56,8 +56,13 @@ on scopes to partition a shared one.
 ## Network modes
 
 A sandbox is created with a network mode that cannot be changed afterward — there is no
-endpoint to move a running sandbox between modes, and forking or restoring a sandbox preserves
-the network mode it had.
+endpoint to move a running sandbox between modes. Restoring a sandbox always preserves that
+sandbox's own mode: restore never changes it. Forking a sandbox from a snapshot is different —
+the new sandbox inherits the snapshot's mode by default, but a `network` field on the fork
+request overrides that default explicitly. A caller with `sandboxes:write` can therefore fork a
+`none` snapshot with `"network": "full"` and get an internet-connected sandbox holding the
+`none` sandbox's filesystem; that is deliberate, not a gap, but it means "created with `none`"
+does not imply "every descendant stays `none`" unless the caller forking it says so.
 
 `full`, the default, attaches the sandbox to a bridge network with a normal route to the
 internet. `none` attaches the sandbox to a second, Docker-internal bridge network that carries
@@ -119,7 +124,7 @@ construction, not by redaction. Events can be listed and filtered through `GET /
 gated behind the `audit:read` scope, and are pruned on both an age and a count basis according
 to `ORCAL_AUDIT_RETENTION_DAYS` and `ORCAL_AUDIT_MAX_EVENTS`.
 
-Two gaps are worth naming explicitly:
+Four gaps are worth naming explicitly:
 
 - **`stat` and `list` are not audited.** Every other file operation is, but checking whether a
   path exists or listing a directory's contents leaves no trace in the audit log. An attacker
@@ -130,6 +135,16 @@ Two gaps are worth naming explicitly:
   deliberate trade-off — an audit store outage should not become an availability outage for the
   product — but it means the audit log's completeness is not guaranteed under a failing audit
   store, only best-effort.
+- **A panicking handler leaves no audit event at all.** Recovery from a panic happens outside
+  the audit middleware, so a request that crashes its handler unwinds past the code that would
+  have written the event. This is distinct from the fail-open case above, which covers a
+  failed *insert*; here nothing is ever attempted.
+- **An unauthenticated caller can crowd out real history.** Every rejected request is audited,
+  including ones from a caller with no valid token at all, and there is no rate limiting on the
+  API. Since pruning by count evicts the oldest events first, anyone who can reach `ORCAL_ADDR`
+  can flood it with denied requests and push genuine history out of the retention window. In
+  practice this is mitigated by the default loopback bind: it only matters once an operator
+  exposes `orcald` beyond `127.0.0.1`.
 
 ## Container hardening
 

@@ -78,17 +78,25 @@ func newFakeDocker(t *testing.T, fi fakeInfo) *Docker {
 }
 
 type fakeDockerClient struct {
-	info system.Info
+	info           system.Info
+	networks       map[string]network.Inspect
+	networkCreates *[]network.CreateOptions
 }
 
 func (f fakeDockerClient) Info(context.Context) (system.Info, error) { return f.info, nil }
 
-func (f fakeDockerClient) NetworkInspect(context.Context, string, network.InspectOptions) (network.Inspect, error) {
-	panic("fakeDockerClient: NetworkInspect not implemented")
+func (f fakeDockerClient) NetworkInspect(_ context.Context, id string, _ network.InspectOptions) (network.Inspect, error) {
+	if n, ok := f.networks[id]; ok {
+		return n, nil
+	}
+	return network.Inspect{}, fmt.Errorf("network %s: %w", id, cerrdefs.ErrNotFound)
 }
 
-func (f fakeDockerClient) NetworkCreate(context.Context, string, network.CreateOptions) (network.CreateResponse, error) {
-	panic("fakeDockerClient: NetworkCreate not implemented")
+func (f fakeDockerClient) NetworkCreate(_ context.Context, name string, options network.CreateOptions) (network.CreateResponse, error) {
+	if f.networkCreates != nil {
+		*f.networkCreates = append(*f.networkCreates, options)
+	}
+	return network.CreateResponse{ID: name}, nil
 }
 
 func (f fakeDockerClient) ContainerCreate(context.Context, *container.Config, *container.HostConfig, *network.NetworkingConfig, *ocispec.Platform, string) (container.CreateResponse, error) {
@@ -157,4 +165,44 @@ func (f fakeDockerClient) CopyFromContainer(context.Context, string, string) (io
 
 func (f fakeDockerClient) CopyToContainer(context.Context, string, string, io.Reader, container.CopyToContainerOptions) error {
 	panic("fakeDockerClient: CopyToContainer not implemented")
+}
+
+func TestEnsureNetworkAcceptsAMatchingExistingNetwork(t *testing.T) {
+	d := &Docker{cli: fakeDockerClient{
+		networks: map[string]network.Inspect{
+			"orcal-isolated": {Name: "orcal-isolated", Internal: true},
+		},
+	}}
+	if err := d.EnsureNetwork(context.Background(), "orcal-isolated", true); err != nil {
+		t.Errorf("EnsureNetwork() = %v, want nil", err)
+	}
+}
+
+func TestEnsureNetworkRejectsAMismatchedExistingNetwork(t *testing.T) {
+	d := &Docker{cli: fakeDockerClient{
+		networks: map[string]network.Inspect{
+			"orcal-isolated": {Name: "orcal-isolated", Internal: false},
+		},
+	}}
+	err := d.EnsureNetwork(context.Background(), "orcal-isolated", true)
+	if !errors.Is(err, runtime.ErrInvalidSpec) {
+		t.Errorf("EnsureNetwork() = %v, want wraps ErrInvalidSpec", err)
+	}
+}
+
+func TestEnsureNetworkCreatesAnAbsentNetwork(t *testing.T) {
+	var created []network.CreateOptions
+	d := &Docker{cli: fakeDockerClient{
+		networks:       map[string]network.Inspect{},
+		networkCreates: &created,
+	}}
+	if err := d.EnsureNetwork(context.Background(), "orcal-isolated", true); err != nil {
+		t.Fatalf("EnsureNetwork() = %v, want nil", err)
+	}
+	if len(created) != 1 {
+		t.Fatalf("NetworkCreate called %d times, want 1", len(created))
+	}
+	if !created[0].Internal {
+		t.Errorf("NetworkCreate options.Internal = false, want true")
+	}
 }

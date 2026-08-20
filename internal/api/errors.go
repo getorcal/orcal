@@ -93,6 +93,11 @@ func classify(err error) (int, ErrorCode) {
 func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error) {
 	status, code := classify(err)
 	message := err.Error()
+	details := map[string]any{"request_id": requestIDFrom(r.Context())}
+	var scopeErr *missingScopeError
+	if errors.As(err, &scopeErr) {
+		details["required_scope"] = string(scopeErr.scope)
+	}
 	if code == CodeInternalError {
 		s.logger.ErrorContext(r.Context(), "request failed", slog.String("error", err.Error()))
 		message = "an internal error occurred"
@@ -100,7 +105,7 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error) {
 	writeJSON(w, status, apigen.Error{Error: apigen.ErrorBody{
 		Code:    code,
 		Message: message,
-		Details: &map[string]any{"request_id": requestIDFrom(r.Context())},
+		Details: &details,
 	}})
 }
 

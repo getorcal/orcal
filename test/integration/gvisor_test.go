@@ -115,6 +115,47 @@ func TestSandboxActuallyRunsUnderGvisor(t *testing.T) {
 	}
 }
 
+func TestNoneSandboxHasNoEgressUnderGvisor(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+
+	full := e.sandbox(t, "gvisor-egress-full")
+	fullSandbox, err := e.client.GetSandbox(ctx, full)
+	if err != nil {
+		t.Fatalf("GetSandbox(full) error = %v", err)
+	}
+	if fullSandbox.OciRuntime == nil || *fullSandbox.OciRuntime != "runsc" {
+		t.Fatalf("expected the full-network control leg to run under runsc, got %v", fullSandbox.OciRuntime)
+	}
+
+	none, err := e.client.CreateSandbox(ctx, orcalclient.CreateSandboxParams{
+		Name: "gvisor-egress-none", Image: testImage, Network: "none",
+	})
+	if err != nil {
+		t.Fatalf("create isolated sandbox: %v", err)
+	}
+	e.sandboxes = append(e.sandboxes, none.Id)
+	if none.OciRuntime == nil || *none.OciRuntime != "runsc" {
+		t.Fatalf("expected the none sandbox to run under runsc, got %v", none.OciRuntime)
+	}
+
+	command := []string{"wget", "-q", "-T", "5", "-O", "/dev/null", "http://example.com/"}
+
+	_, fullCode := e.runToCompletion(t, full, command...)
+	if fullCode != 0 {
+		t.Fatalf("control leg failed: a full-network sandbox under runsc could not reach the network (exit %d). "+
+			"This test is a paired control, not a single assertion: leg one proves the environment has "+
+			"egress at all, and only then does leg two's failure prove the none network is isolating it "+
+			"under gVisor specifically. The docker-tagged suite already covers runc; this covers runsc.",
+			fullCode)
+	}
+
+	_, noneCode := e.runToCompletion(t, none.Id, command...)
+	if noneCode == 0 {
+		t.Fatal("a none-network sandbox under runsc reached the internet; the isolated network is not isolating")
+	}
+}
+
 func TestProductWorksEndToEndUnderGvisor(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()

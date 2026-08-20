@@ -6,6 +6,10 @@ import (
 	"strconv"
 )
 
+// time.Duration(days) * 24 * time.Hour overflows int64 nanoseconds above ~106751 days;
+// 36500 (100 years) keeps every downstream computation well clear of that wraparound.
+const maxAuditRetentionDays = 36500
+
 type Config struct {
 	Addr               string
 	DataDir            string
@@ -69,6 +73,10 @@ func Load() (Config, error) {
 	retentionDays, err := envPositiveInt64("ORCAL_AUDIT_RETENTION_DAYS", 90)
 	if err != nil {
 		return Config{}, err
+	}
+	if retentionDays > maxAuditRetentionDays {
+		return Config{}, fmt.Errorf("config: ORCAL_AUDIT_RETENTION_DAYS must not exceed %d, got %d",
+			maxAuditRetentionDays, retentionDays)
 	}
 	c.AuditRetentionDays = int(retentionDays)
 	maxEvents, err := envPositiveInt64("ORCAL_AUDIT_MAX_EVENTS", 1000000)

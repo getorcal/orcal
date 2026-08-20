@@ -96,6 +96,20 @@ func TestResponsesMatchTheOpenAPIContract(t *testing.T) {
 		assertMatchesContract(t, router, execReq, execResp, execBody)
 	})
 
+	tokenResp, tokenReq, tokenBody := h.doCapturing(t, http.MethodPost, "/v1/tokens", map[string]any{
+		"name": "contract-token", "scopes": []string{"exec"},
+	})
+	if tokenResp.StatusCode != http.StatusCreated {
+		t.Fatalf("create token status = %d, want 201", tokenResp.StatusCode)
+	}
+	var createdToken apigen.CreatedToken
+	if err := json.Unmarshal(tokenBody, &createdToken); err != nil {
+		t.Fatalf("decode token: %v", err)
+	}
+	t.Run(tokenReq.Method+" "+tokenReq.URL.Path, func(t *testing.T) {
+		assertMatchesContract(t, router, tokenReq, tokenResp, tokenBody)
+	})
+
 	runtimeID := h.fake.IDForSandbox(created.Id)
 	h.fake.Seed(runtimeID, "/app/a.txt", 0o644, []byte("hello"))
 
@@ -152,6 +166,8 @@ func TestResponsesMatchTheOpenAPIContract(t *testing.T) {
 		{http.MethodGet, "/v1/sandboxes/my-agent/files/stat?path=/app/a.txt", nil, seedAppFile},
 		{http.MethodGet, "/v1/sandboxes/my-agent/files/list?path=/app", nil, seedAppFile},
 		{http.MethodGet, "/v1/sandboxes/my-agent/archive?path=/app", nil, seedAppFile},
+		{http.MethodGet, "/v1/tokens", nil, nil},
+		{http.MethodGet, "/v1/events", nil, nil},
 		{http.MethodDelete, "/v1/sandboxes/" + created.Id, nil, nil},
 	}
 
@@ -173,5 +189,13 @@ func TestResponsesMatchTheOpenAPIContract(t *testing.T) {
 	}
 	t.Run("DELETE /v1/snapshots/{ref}", func(t *testing.T) {
 		assertMatchesContract(t, router, delReq, delResp, delBody)
+	})
+
+	delTokenResp, delTokenReq, delTokenBody := h.doCapturing(t, http.MethodDelete, "/v1/tokens/"+createdToken.Id, nil)
+	if delTokenResp.StatusCode != http.StatusNoContent {
+		t.Fatalf("revoke token status = %d, want 204", delTokenResp.StatusCode)
+	}
+	t.Run("DELETE /v1/tokens/{id}", func(t *testing.T) {
+		assertMatchesContract(t, router, delTokenReq, delTokenResp, delTokenBody)
 	})
 }

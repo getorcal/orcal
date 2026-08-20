@@ -70,7 +70,7 @@ func (s *Server) handleCreateSandbox(w http.ResponseWriter, r *http.Request) {
 		}
 		a.resourceType = "sandbox"
 		a.resourceID = created.ID
-		a.details = map[string]any{"image": created.Image, "network": string(created.Network)}
+		a.details = map[string]any{"image": created.Image, "network": string(created.Network), "name": created.Name}
 	})
 	writeJSON(w, http.StatusCreated, toAPISandbox(created))
 }

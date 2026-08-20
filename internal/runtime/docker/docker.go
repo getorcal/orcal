@@ -81,8 +81,12 @@ func (d *Docker) ResolveRuntime(ctx context.Context, configured string) (string,
 }
 
 func (d *Docker) EnsureNetwork(ctx context.Context, name string, internal bool) error {
-	_, err := d.cli.NetworkInspect(ctx, name, network.InspectOptions{})
+	existing, err := d.cli.NetworkInspect(ctx, name, network.InspectOptions{})
 	if err == nil {
+		if existing.Internal != internal {
+			return fmt.Errorf("%w: network %q exists with internal=%t, but internal=%t was requested",
+				runtime.ErrInvalidSpec, name, existing.Internal, internal)
+		}
 		return nil
 	}
 	if !cerrdefs.IsNotFound(err) {
