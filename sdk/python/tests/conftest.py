@@ -1,4 +1,5 @@
 import json
+import os
 
 import httpx
 import pytest
@@ -44,3 +45,27 @@ def make_client():
         return client, recorder
 
     return factory
+
+
+@pytest.fixture(scope="session")
+def live():
+    url = os.environ.get("ORCAL_URL")
+    token = os.environ.get("ORCAL_TOKEN")
+    if not url or not token:
+        pytest.fail(
+            "ORCAL_URL and ORCAL_TOKEN must be set. These tests run against a real orcald and "
+            "must fail rather than skip when one is unreachable: a suite that skips quietly is "
+            "a suite that never ran."
+        )
+    client = orcal.Orcal(url, token)
+    try:
+        client.version()
+    except Exception as exc:
+        pytest.fail(f"no orcald reachable at {url}: {exc}")
+    yield client
+    client.close()
+
+
+@pytest.fixture
+def image():
+    return os.environ.get("ORCAL_TEST_IMAGE", "alpine:3.20")

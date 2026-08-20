@@ -8,7 +8,7 @@ license = { text = "MIT" }
 dependencies = ["httpx>=0.27"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "datamodel-code-generator>=0.25"]
+dev = ["pytest>=8.0", "datamodel-code-generator>=0.25", "pyyaml>=6.0"]
 
 [build-system]
 requires = ["hatchling"]

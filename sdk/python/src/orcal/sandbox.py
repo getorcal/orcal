@@ -138,6 +138,17 @@ class Sandbox:
             lambda item: models.Exec(**item),
         )
 
+    def snapshots(self, **filters):
+        from ._pagination import paginate
+        from .snapshot import Snapshot
+
+        return paginate(
+            self._client._transport,
+            f"/v1/sandboxes/{self._ref()}/snapshots",
+            filters,
+            lambda item: Snapshot._from_payload(self._client, item),
+        )
+
     def __enter__(self):
         return self
 

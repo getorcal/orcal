@@ -21,6 +21,9 @@ class Orcal:
         self.close()
         return False
 
+    def healthz(self):
+        return self._transport.request("GET", "/v1/healthz").json()
+
     def version(self):
         return models.Version(**self._transport.request("GET", "/v1/version").json())
 
@@ -36,6 +39,9 @@ class Orcal:
     def get_snapshot(self, ref):
         payload = self._transport.request("GET", f"/v1/snapshots/{self._transport.escape(ref)}").json()
         return Snapshot._from_payload(self, payload)
+
+    def get_exec(self, exec_id):
+        return models.Exec(**self._transport.request("GET", f"/v1/execs/{self._transport.escape(exec_id)}").json())
 
     def create_token(self, name, scopes, expires_in_seconds=None):
         body = {"name": name, "scopes": list(scopes)}

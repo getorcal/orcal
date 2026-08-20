@@ -54,6 +54,11 @@ jobs:
           # 1.25.13), which is enough to fail the vuln gate on already-fixed advisories.
           check-latest: true
           cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install the SDK
+        run: cd sdk/python && pip install -e '.[dev]'
       - name: Generated code is current
         run: make verify-generate
       - name: Module graph is unchanged by building
@@ -249,4 +254,46 @@ jobs:
           echo "No unaccepted reachable vulnerabilities."
           if [ -s accepted.txt ]; then
             echo "Consciously accepted:"; sed 's#^#  #' accepted.txt
+          fi
+
+  sdk-python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+          cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install the SDK
+        run: cd sdk/python && pip install -e '.[dev]'
+      - name: Generated models are current
+        run: |
+          make generate-python
+          git diff --exit-code sdk/python/src/orcal/models.py
+      - name: Unit suite
+        run: cd sdk/python && python -m pytest -q --ignore=tests/test_live.py
+      - name: Start orcald
+        run: |
+          make build
+          ORCAL_DATA_DIR=/tmp/orcal-sdk ./bin/orcald > /tmp/orcald.log 2>&1 &
+          for i in $(seq 1 30); do
+            token=$(grep -o 'orcal_[A-Za-z0-9_-]*' /tmp/orcald.log | head -1) && [ -n "$token" ] && break
+            sleep 1
+          done
+          [ -n "$token" ] || { echo "::error::orcald never printed a token"; cat /tmp/orcald.log; exit 1; }
+          echo "ORCAL_TOKEN=$token" >> "$GITHUB_ENV"
+          echo "ORCAL_URL=http://127.0.0.1:8080" >> "$GITHUB_ENV"
+      - name: Live suite
+        run: cd sdk/python && python -m pytest tests/test_live.py -q
+      - name: No leaked containers
+        if: always()
+        run: |
+          leaked=$(docker ps -aq --filter "label=orcal.managed" | wc -l | tr -d ' ')
+          if [ "$leaked" != "0" ]; then
+            echo "::error::$leaked orcal container(s) left behind"; docker ps -a --filter "label=orcal.managed"; exit 1
           fi
