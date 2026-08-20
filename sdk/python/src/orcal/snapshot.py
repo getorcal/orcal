@@ -1,4 +1,5 @@
 from . import models
+from ._build import build
 
 
 class Snapshot:
@@ -8,7 +9,7 @@ class Snapshot:
 
     @classmethod
     def _from_payload(cls, client, payload):
-        return cls(client, models.Snapshot(**payload))
+        return cls(client, build(models.Snapshot, payload))
 
     @property
     def id(self):

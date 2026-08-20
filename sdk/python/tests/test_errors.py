@@ -1,36 +1,58 @@
 import json
+import pathlib
 
 import pytest
+import yaml
 
-from orcal import errors
+from orcal import errors, models
+
+SPEC = pathlib.Path(__file__).resolve().parents[3] / "spec" / "openapi.yaml"
+
+EXPECTED_TYPES = {
+    "invalid_request": errors.InvalidRequest,
+    "unauthorized": errors.Unauthorized,
+    "forbidden": errors.Forbidden,
+    "token_not_found": errors.TokenNotFound,
+    "sandbox_not_found": errors.SandboxNotFound,
+    "snapshot_not_found": errors.SnapshotNotFound,
+    "exec_not_found": errors.ExecNotFound,
+    "path_not_found": errors.PathNotFound,
+    "name_taken": errors.Conflict,
+    "invalid_state": errors.Conflict,
+    "resource_exhausted": errors.ResourceExhausted,
+    "runtime_unavailable": errors.RuntimeUnavailable,
+    "internal_error": errors.InternalError,
+}
+
+
+def spec_error_codes():
+    doc = yaml.safe_load(SPEC.read_text())
+    codes = doc["components"]["schemas"]["ErrorBody"]["properties"]["code"]["enum"]
+    assert codes, "parsed zero error codes; the spec is not being read"
+    return list(codes)
+
+
+SPEC_CODES = spec_error_codes()
 
 
 def body(code, message="boom", request_id="req-1"):
     return json.dumps({"error": {"code": code, "message": message, "details": {"request_id": request_id}}}).encode()
 
 
-@pytest.mark.parametrize(
-    "code,expected",
-    [
-        ("invalid_request", errors.InvalidRequest),
-        ("unauthorized", errors.Unauthorized),
-        ("forbidden", errors.Forbidden),
-        ("token_not_found", errors.TokenNotFound),
-        ("sandbox_not_found", errors.SandboxNotFound),
-        ("snapshot_not_found", errors.SnapshotNotFound),
-        ("exec_not_found", errors.ExecNotFound),
-        ("path_not_found", errors.PathNotFound),
-        ("name_taken", errors.Conflict),
-        ("invalid_state", errors.Conflict),
-        ("resource_exhausted", errors.ResourceExhausted),
-        ("runtime_unavailable", errors.RuntimeUnavailable),
-        ("internal_error", errors.InternalError),
-    ],
-)
-def test_every_wire_code_maps_to_its_type(code, expected):
+@pytest.mark.parametrize("code", SPEC_CODES)
+def test_every_code_in_the_spec_maps_to_its_type(code):
+    assert code in EXPECTED_TYPES, f"{code} is in the spec's ErrorBody enum but no SDK type claims it"
     err = errors.from_response(400, body(code))
-    assert isinstance(err, expected)
+    assert type(err) is EXPECTED_TYPES[code]
     assert err.code == code
+
+
+def test_the_error_table_claims_no_code_the_spec_dropped():
+    assert set(errors.CODE_TYPES) <= set(SPEC_CODES)
+
+
+def test_the_generated_enum_carries_the_same_vocabulary_as_the_spec():
+    assert {member.value for member in models.Code} == set(SPEC_CODES)
 
 
 def test_not_found_types_share_a_base():

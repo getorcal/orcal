@@ -1,4 +1,11 @@
 from . import models
+from ._build import build
+
+
+class FileListing(list):
+    def __init__(self, items, truncated):
+        super().__init__(items)
+        self.truncated = truncated
 
 
 class SandboxFiles:
@@ -18,11 +25,12 @@ class SandboxFiles:
 
     def stat(self, path):
         body = self._client._transport.request("GET", self._path("/stat"), params={"path": path}).json()
-        return models.FileInfo(**body)
+        return build(models.FileInfo, body)
 
     def list(self, path):
         body = self._client._transport.request("GET", self._path("/list"), params={"path": path}).json()
-        return [models.FileInfo(**entry) for entry in body.get("items", [])]
+        entries = [build(models.FileInfo, entry) for entry in body.get("items") or []]
+        return FileListing(entries, bool(body.get("truncated")))
 
     def download(self, path):
         archive = f"/v1/sandboxes/{self._client._transport.escape(self._ref)}/archive"
@@ -41,7 +49,7 @@ class Sandbox:
 
     @classmethod
     def _from_payload(cls, client, payload):
-        return cls(client, models.Sandbox(**payload))
+        return cls(client, build(models.Sandbox, payload))
 
     @property
     def id(self):
@@ -67,7 +75,7 @@ class Sandbox:
         return self._client._transport.escape(self.raw.id)
 
     def _replace(self, payload):
-        self.raw = models.Sandbox(**payload)
+        self.raw = build(models.Sandbox, payload)
         return self
 
     def refresh(self):
@@ -110,7 +118,7 @@ class Sandbox:
         if user:
             body["user"] = user
         created = self._client._transport.request("POST", f"/v1/sandboxes/{self._ref()}/execs", json=body).json()
-        raw = models.Exec(**created)
+        raw = build(models.Exec, created)
         handle = ExecStream(self._client, raw.id)
         if stream:
             return handle
@@ -135,7 +143,7 @@ class Sandbox:
             self._client._transport,
             f"/v1/sandboxes/{self._ref()}/execs",
             filters,
-            lambda item: models.Exec(**item),
+            lambda item: build(models.Exec, item),
         )
 
     def snapshots(self, **filters):

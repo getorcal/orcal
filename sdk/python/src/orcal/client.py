@@ -1,4 +1,5 @@
 from . import models
+from ._build import build
 from ._pagination import paginate
 from ._transport import Transport
 from .sandbox import Sandbox
@@ -25,7 +26,7 @@ class Orcal:
         return self._transport.request("GET", "/v1/healthz").json()
 
     def version(self):
-        return models.Version(**self._transport.request("GET", "/v1/version").json())
+        return build(models.Version, self._transport.request("GET", "/v1/version").json())
 
     def sandbox(self, **opts):
         body = {key: opts[key] for key in _CREATE_FIELDS if opts.get(key) is not None}
@@ -41,20 +42,20 @@ class Orcal:
         return Snapshot._from_payload(self, payload)
 
     def get_exec(self, exec_id):
-        return models.Exec(**self._transport.request("GET", f"/v1/execs/{self._transport.escape(exec_id)}").json())
+        return build(models.Exec, self._transport.request("GET", f"/v1/execs/{self._transport.escape(exec_id)}").json())
 
     def create_token(self, name, scopes, expires_in_seconds=None):
         body = {"name": name, "scopes": list(scopes)}
         if expires_in_seconds is not None:
             body["expires_in_seconds"] = expires_in_seconds
-        return models.CreatedToken(**self._transport.request("POST", "/v1/tokens", json=body).json())
+        return build(models.CreatedToken, self._transport.request("POST", "/v1/tokens", json=body).json())
 
     def revoke_token(self, token_id):
         self._transport.request("DELETE", f"/v1/tokens/{self._transport.escape(token_id)}")
 
     def list_tokens(self):
         body = self._transport.request("GET", "/v1/tokens").json()
-        return [models.Token(**item) for item in body.get("items", [])]
+        return [build(models.Token, item) for item in body.get("items") or []]
 
     def sandboxes(self, **filters):
         return paginate(self._transport, "/v1/sandboxes", filters, lambda item: Sandbox._from_payload(self, item))
@@ -63,4 +64,4 @@ class Orcal:
         return paginate(self._transport, "/v1/snapshots", filters, lambda item: Snapshot._from_payload(self, item))
 
     def events(self, **filters):
-        return paginate(self._transport, "/v1/events", filters, lambda item: models.Event(**item))
+        return paginate(self._transport, "/v1/events", filters, lambda item: build(models.Event, item))

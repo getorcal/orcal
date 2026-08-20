@@ -35,6 +35,10 @@ for variant in ("a", "b", "c"):
 
 A string command runs through a shell as `sh -c`; pass a list for exact argv.
 
+`sb.files.list(path)` returns the entries as a list carrying a `truncated`
+flag, which is `True` when the daemon capped the listing and the result is
+incomplete.
+
 ## Isolation
 
 `client.sandbox(image=..., network="none")` creates a sandbox with no route off

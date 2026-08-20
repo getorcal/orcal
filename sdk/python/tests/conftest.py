@@ -1,4 +1,3 @@
-import json
 import os
 
 import httpx
@@ -22,14 +21,48 @@ def sandbox_payload(sandbox_id="sb-1", name="demo", network="full"):
     }
 
 
+def snapshot_payload(snapshot_id="snap-1", sandbox_id="sb-1", name="v1"):
+    return {
+        "id": snapshot_id,
+        "name": name,
+        "sandbox_id": sandbox_id,
+        "runtime_ref": "sha256:x",
+        "image": "alpine:3.20",
+        "size_bytes": 1,
+        "created_at": "2026-08-20T10:00:00Z",
+    }
+
+
+def file_info_payload(name="a.txt", size=5, is_dir=False):
+    return {
+        "name": name,
+        "size": size,
+        "mode": "0644",
+        "mtime": "2026-08-20T10:00:00Z",
+        "is_dir": is_dir,
+    }
+
+
+def token_payload(token_id="tok-1", name="ci"):
+    return {
+        "id": token_id,
+        "name": name,
+        "prefix": "orcal_",
+        "scopes": ["admin"],
+        "created_at": "2026-08-20T10:00:00Z",
+    }
+
+
 class Recorder:
     def __init__(self, routes):
         self.routes = routes
         self.calls = []
+        self.requests = []
 
     def __call__(self, request):
         path = request.url.raw_path.decode().split("?", 1)[0]
         self.calls.append((request.method, path, request.content))
+        self.requests.append(request)
         key = (request.method, path)
         handler = self.routes.get(key)
         if handler is None:
