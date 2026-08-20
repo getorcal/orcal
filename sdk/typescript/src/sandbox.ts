@@ -1,6 +1,8 @@
 import type { Transport } from "./transport.js";
-import type { FileInfo, FileList, Sandbox as SandboxModel, Snapshot as SnapshotModel } from "./types.js";
+import type { Exec as ExecModel, FileInfo, FileList, Sandbox as SandboxModel, Snapshot as SnapshotModel } from "./types.js";
 import { Snapshot } from "./snapshot.js";
+import { collectExec, ExecStream, type ExecOptions, type ExecResult } from "./exec.js";
+import { paginate } from "./pagination.js";
 
 export class SandboxFiles {
   constructor(
@@ -114,6 +116,33 @@ export class Sandbox {
     const ref = typeof snapshot === "string" ? snapshot : snapshot.id;
     return this.replace(
       await this.transport.request("POST", `/v1/sandboxes/${this.ref()}/restore`, { body: { snapshot: ref } }),
+    );
+  }
+
+  async exec(command: string | string[], options?: ExecOptions & { stream?: false }): Promise<ExecResult>;
+  async exec(command: string | string[], options: ExecOptions & { stream: true }): Promise<ExecStream>;
+  async exec(
+    command: string | string[],
+    options: ExecOptions & { stream?: boolean } = {},
+  ): Promise<ExecResult | ExecStream> {
+    const argv = typeof command === "string" ? ["sh", "-c", command] : [...command];
+    const body: Record<string, unknown> = { command: argv };
+    if (options.env) body.env = options.env;
+    if (options.workingDir) body.working_dir = options.workingDir;
+    if (options.user) body.user = options.user;
+    const response = await this.transport.request("POST", `/v1/sandboxes/${this.ref()}/execs`, { body });
+    const created = (await response.json()) as ExecModel;
+    if (options.stream) return new ExecStream(this.transport, created.id);
+    return collectExec(this.transport, created.id);
+  }
+
+  execs(filters: Record<string, string | number | undefined> = {}): AsyncGenerator<ExecModel> {
+    return paginate(this.transport, `/v1/sandboxes/${this.ref()}/execs`, filters, (item: ExecModel) => item);
+  }
+
+  snapshots(filters: Record<string, string | number | undefined> = {}): AsyncGenerator<Snapshot> {
+    return paginate(this.transport, `/v1/sandboxes/${this.ref()}/snapshots`, filters, (item: SnapshotModel) =>
+      new Snapshot(this.transport, item, this.forkFactory),
     );
   }
 }

@@ -2,7 +2,17 @@ import { Transport, type TransportOptions } from "./transport.js";
 import { Sandbox } from "./sandbox.js";
 import { Snapshot } from "./snapshot.js";
 import { withCleanup } from "./cleanup.js";
-import type { CreatedToken, Sandbox as SandboxModel, Snapshot as SnapshotModel, Token, TokenList, Version } from "./types.js";
+import { paginate } from "./pagination.js";
+import type {
+  CreatedToken,
+  Event as EventModel,
+  Exec as ExecModel,
+  Sandbox as SandboxModel,
+  Snapshot as SnapshotModel,
+  Token,
+  TokenList,
+  Version,
+} from "./types.js";
 
 export interface CreateSandboxOptions {
   name?: string;
@@ -94,5 +104,24 @@ export class Orcal {
 
   async revokeToken(id: string): Promise<void> {
     await this.transport.request("DELETE", `/v1/tokens/${this.transport.escape(id)}`);
+  }
+
+  sandboxes(filters: Record<string, string | number | undefined> = {}): AsyncGenerator<Sandbox> {
+    return paginate(this.transport, "/v1/sandboxes", filters, (item: SandboxModel) => this._fromPayload(item));
+  }
+
+  snapshots(filters: Record<string, string | number | undefined> = {}): AsyncGenerator<Snapshot> {
+    return paginate(this.transport, "/v1/snapshots", filters, (item: SnapshotModel) =>
+      new Snapshot(this.transport, item, (opts) => this.sandbox(opts)),
+    );
+  }
+
+  events(filters: Record<string, string | number | undefined> = {}): AsyncGenerator<EventModel> {
+    return paginate(this.transport, "/v1/events", filters, (item: EventModel) => item);
+  }
+
+  async getExec(id: string): Promise<ExecModel> {
+    const response = await this.transport.request("GET", `/v1/execs/${this.transport.escape(id)}`);
+    return (await response.json()) as ExecModel;
   }
 }
