@@ -60,6 +60,41 @@ func TestNetworkIsPersisted(t *testing.T) {
 	}
 }
 
+func TestForkInheritsTheSnapshotsNetworkWhenNoneIsRequested(t *testing.T) {
+	svc, f := newService(t)
+	svc.SetSnapshots(stubSnapshots{ref: "sha256:snap", id: "sn-1", network: string(sandbox.NetworkNone)})
+
+	forked, err := svc.Fork(context.Background(), "working-v1", sandbox.CreateOptions{Name: "experiment-a"})
+	if err != nil {
+		t.Fatalf("Fork() error = %v", err)
+	}
+	if forked.Network != sandbox.NetworkNone {
+		t.Fatalf("Network = %q, want inherited none", forked.Network)
+	}
+	if got := f.LastCreateSpec().NetworkName; got != "orcal-isolated" {
+		t.Fatalf("a forked none sandbox must join the isolated network, got %q", got)
+	}
+}
+
+func TestForkHonoursAnExplicitNetworkOverridingTheSnapshot(t *testing.T) {
+	svc, f := newService(t)
+	svc.SetSnapshots(stubSnapshots{ref: "sha256:snap", id: "sn-1", network: string(sandbox.NetworkNone)})
+
+	forked, err := svc.Fork(context.Background(), "working-v1", sandbox.CreateOptions{
+		Name:    "experiment-a",
+		Network: sandbox.NetworkFull,
+	})
+	if err != nil {
+		t.Fatalf("Fork() error = %v", err)
+	}
+	if forked.Network != sandbox.NetworkFull {
+		t.Fatalf("Network = %q, want the explicit override full", forked.Network)
+	}
+	if got := f.LastCreateSpec().NetworkName; got != "orcal" {
+		t.Fatalf("an explicit full override must join the egress network, got %q", got)
+	}
+}
+
 func TestStartAndStopDoNotChangeTheNetwork(t *testing.T) {
 	svc, _ := newService(t)
 	ctx := context.Background()

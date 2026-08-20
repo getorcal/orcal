@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/getorcal/orcal/internal/apigen"
 	"github.com/getorcal/orcal/internal/audit"
 	"github.com/getorcal/orcal/internal/auth"
 )
@@ -143,8 +145,12 @@ func TestWrongScopeIsForbiddenNotUnauthorized(t *testing.T) {
 	if rec.Header().Get("WWW-Authenticate") != "" {
 		t.Error("403 must not carry a challenge; re-presenting the same credential cannot help")
 	}
-	if body := rec.Body.String(); !strings.Contains(body, "sandboxes:write") {
-		t.Errorf("403 must name the required scope, got %s", body)
+	var body apigen.Error
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Error.Details == nil || (*body.Error.Details)["required_scope"] != "sandboxes:write" {
+		t.Errorf("403 must name the required scope in details.required_scope, got %+v", body.Error.Details)
 	}
 }
 

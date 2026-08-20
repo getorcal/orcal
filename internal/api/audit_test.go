@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/getorcal/orcal/internal/apigen"
 	"github.com/getorcal/orcal/internal/audit"
 	"github.com/getorcal/orcal/internal/auth"
 	"github.com/getorcal/orcal/internal/runtime/fake"
@@ -163,6 +164,91 @@ func TestUnauthorizedRequestsAreAudited(t *testing.T) {
 	if got[0].ActorTokenID != "" {
 		t.Fatal("an unauthenticated request has no actor")
 	}
+	if got[0].Details["reason"] != "missing" {
+		t.Fatalf("a request with no token must be recorded with reason missing, got %v", got[0].Details)
+	}
+}
+
+func TestUnauthorizedRequestsRecordTheSpecificDenialReason(t *testing.T) {
+	srv, svc, events := newAuditTestServer(t)
+	ctx := context.Background()
+
+	expiredTok, plaintextExpired, err := svc.Create(ctx,
+		auth.CreateOptions{Name: "expired", Scopes: auth.Scopes{auth.ScopeSandboxesRead}, ExpiresIn: 1}, auth.Scopes{auth.ScopeAll})
+	if err != nil {
+		t.Fatalf("create expired: %v", err)
+	}
+
+	revokedPlaintext := mint(t, svc, "revoked", auth.Scopes{auth.ScopeSandboxesRead})
+	tokens, err := svc.List(ctx)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	var revokedTok *auth.Token
+	for _, tok := range tokens {
+		if tok.Name == "revoked" {
+			revokedTok = tok
+		}
+	}
+	if revokedTok == nil {
+		t.Fatal("could not find the minted revoked token")
+	}
+	if err := svc.Revoke(ctx, revokedTok.ID); err != nil {
+		t.Fatalf("revoke: %v", err)
+	}
+
+	cases := []struct {
+		name       string
+		header     string
+		wantReason string
+		wantPrefix string
+	}{
+		{"missing", "", "missing", ""},
+		{"malformed", "Basic whatever", "malformed", ""},
+		{"unknown", "Bearer orcal_definitely-not-a-real-token", "unknown", ""},
+		{"expired", "Bearer " + plaintextExpired, "expired", expiredTok.Prefix},
+		{"revoked", "Bearer " + revokedPlaintext, "revoked", revokedTok.Prefix},
+	}
+	for _, tc := range cases {
+		req := httptest.NewRequest(http.MethodGet, "/v1/sandboxes", nil)
+		if tc.header != "" {
+			req.Header.Set("Authorization", tc.header)
+		}
+		rec := httptest.NewRecorder()
+		srv.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("%s: expected 401, got %d", tc.name, rec.Code)
+		}
+	}
+
+	got, err := events.List(ctx, audit.Filter{})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(got) != len(cases) {
+		t.Fatalf("expected %d events, got %d", len(cases), len(got))
+	}
+	byReason := make(map[string]*audit.Event, len(got))
+	for _, e := range got {
+		byReason[e.Details["reason"].(string)] = e
+	}
+	for _, tc := range cases {
+		e, ok := byReason[tc.wantReason]
+		if !ok {
+			t.Errorf("no event recorded with reason %q", tc.wantReason)
+			continue
+		}
+		gotPrefix, hasPrefix := e.Details["token_prefix"]
+		if tc.wantPrefix == "" {
+			if hasPrefix {
+				t.Errorf("%s: token_prefix must be absent when the credential never resolved, got %v", tc.name, gotPrefix)
+			}
+			continue
+		}
+		if gotPrefix != tc.wantPrefix {
+			t.Errorf("%s: token_prefix = %v, want %q", tc.name, gotPrefix, tc.wantPrefix)
+		}
+	}
 }
 
 func TestForbiddenRequestsRecordTheRequiredScope(t *testing.T) {
@@ -187,6 +273,60 @@ func TestForbiddenRequestsRecordTheRequiredScope(t *testing.T) {
 	}
 	if got[0].Details["required_scope"] != "sandboxes:write" {
 		t.Fatalf("the required scope must be recorded, got %v", got[0].Details)
+	}
+	if got[0].Details["reason"] != "insufficient_scope" {
+		t.Fatalf("the denial reason must be insufficient_scope, got %v", got[0].Details)
+	}
+}
+
+func TestSandboxCreationRecordsTheNameInAuditDetails(t *testing.T) {
+	srv, svc, events := newAuditTestServer(t)
+	token := mint(t, svc, "root", auth.Scopes{auth.ScopeAll})
+
+	if rec := postJSON(srv, "/v1/sandboxes", token, map[string]any{"image": "alpine", "name": "my-agent"}); rec.Code != http.StatusCreated {
+		t.Fatalf("create: %d", rec.Code)
+	}
+	got, err := events.List(context.Background(), audit.Filter{})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected one event, got %d", len(got))
+	}
+	if got[0].Details["name"] != "my-agent" {
+		t.Fatalf("sandbox.create must record the sandbox name, got %v", got[0].Details)
+	}
+	if got[0].Details["image"] != "alpine" || got[0].Details["network"] != "full" {
+		t.Fatalf("sandbox.create must still record image and network, got %v", got[0].Details)
+	}
+}
+
+func TestTokenCreationRecordsIDAndScopesInAuditDetails(t *testing.T) {
+	srv, svc, events := newAuditTestServer(t)
+	token := mint(t, svc, "root", auth.Scopes{auth.ScopeAll})
+
+	rec := postJSON(srv, "/v1/tokens", token, map[string]any{"name": "ci", "scopes": []string{"exec", "sandboxes:write"}})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body.String())
+	}
+	var created apigen.CreatedToken
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	got, err := events.List(context.Background(), audit.Filter{})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected one event, got %d", len(got))
+	}
+	if got[0].Details["token_id"] != created.Id {
+		t.Fatalf("token.create must record token_id, got %v", got[0].Details)
+	}
+	scopes, ok := got[0].Details["scopes"].([]string)
+	if !ok || len(scopes) != 2 {
+		t.Fatalf("token.create must record the minted scopes, got %v (%T)", got[0].Details["scopes"], got[0].Details["scopes"])
 	}
 }
 

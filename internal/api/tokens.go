@@ -40,6 +40,11 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 	annotate(r.Context(), func(a *annotation) {
 		a.resourceType = "token"
 		a.resourceID = created.ID
+		scopes := make([]string, len(created.Scopes))
+		for i, scope := range created.Scopes {
+			scopes[i] = string(scope)
+		}
+		a.details = map[string]any{"token_id": created.ID, "scopes": scopes}
 	})
 	writeJSON(w, http.StatusCreated, apigen.CreatedToken{Token: plaintext, Id: created.ID, Name: created.Name,
 		Prefix: created.Prefix, Scopes: apiScopes(created.Scopes), CreatedAt: created.CreatedAt,
