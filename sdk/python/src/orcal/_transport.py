@@ -15,6 +15,7 @@ class Transport:
         self._base = url.rstrip("/")
         self._client = httpx.Client(timeout=timeout, transport=transport)
         self._token = token
+        self._timeout = timeout
 
     @staticmethod
     def escape(segment):
@@ -59,9 +60,16 @@ class Transport:
             raise errors.from_response(response.status_code, response.content)
 
     def stream(self, method, path, *, params=None, headers=None):
+        timeout = httpx.Timeout(
+            connect=self._timeout,
+            read=None,
+            write=self._timeout,
+            pool=self._timeout,
+        )
         return self._client.stream(
             method,
             self._base + path,
             params=params,
             headers=self._headers(headers),
+            timeout=timeout,
         )

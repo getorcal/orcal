@@ -112,3 +112,62 @@ def test_connection_failure_is_retried_for_a_get():
 
     transport_with(handler).request("GET", "/v1/sandboxes")
     assert len(calls) == 2
+
+
+def test_stream_returns_usable_response():
+    def handler(request):
+        return httpx.Response(200, content=b"chunk1\nchunk2\n")
+
+    transport = transport_with(handler)
+    with transport.stream("GET", "/v1/execs/id/logs") as response:
+        assert response.status_code == 200
+        content = b"".join(response.iter_bytes())
+        assert content == b"chunk1\nchunk2\n"
+
+
+def test_stream_bearer_token_is_sent():
+    seen = {}
+
+    def handler(request):
+        seen["auth"] = request.headers.get("authorization")
+        return httpx.Response(200, content=b"")
+
+    transport = transport_with(handler)
+    with transport.stream("GET", "/v1/execs/id/logs") as response:
+        pass
+    assert seen["auth"] == "Bearer orcal_secret"
+
+
+def test_stream_read_timeout_is_disabled():
+    seen = {}
+
+    def handler(request):
+        timeout = request.extensions.get("timeout")
+        seen["timeout"] = timeout
+        return httpx.Response(200, content=b"")
+
+    transport = transport_with(handler)
+    with transport.stream("GET", "/v1/execs/id/logs") as response:
+        pass
+
+    timeout = seen["timeout"]
+    assert timeout is not None
+    assert timeout["read"] is None
+    assert timeout["connect"] is not None
+    assert timeout["write"] is not None
+    assert timeout["pool"] is not None
+
+
+def test_request_has_read_timeout():
+    seen = {}
+
+    def handler(request):
+        timeout = request.extensions.get("timeout")
+        seen["timeout"] = timeout
+        return httpx.Response(200, json={})
+
+    transport_with(handler).request("GET", "/v1/sandboxes")
+
+    timeout = seen["timeout"]
+    assert timeout is not None
+    assert timeout["read"] is not None
