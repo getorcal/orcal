@@ -1,4 +1,4 @@
-.PHONY: build test test-docker lint fmt generate generate-python verify-generate up down logs
+.PHONY: build test test-docker lint fmt generate generate-python generate-ts verify-generate up down logs
 
 build:
 	go build -o bin/orcald ./cmd/orcald
@@ -27,11 +27,14 @@ generate-python:
 		--use-union-operator \
 		--disable-timestamp
 
-generate: generate-python
+generate-ts:
+	cd sdk/typescript && npx --yes openapi-typescript ../../spec/openapi.yaml -o src/models.ts
+
+generate: generate-python generate-ts
 	go generate ./...
 
 verify-generate: generate
-	git diff --exit-code internal/apigen sdk/python/src/orcal/models.py
+	git diff --exit-code internal/apigen sdk/python/src/orcal/models.py sdk/typescript/src/models.ts
 
 up:
 	docker compose -f deploy/docker-compose.yml up -d --build

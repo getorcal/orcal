@@ -59,8 +59,15 @@ jobs:
           python-version: "3.10"
       - name: Install the SDK
         run: cd sdk/python && pip install -e '.[dev]'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18.x"
+      - name: Install the TypeScript SDK
+        run: cd sdk/typescript && npm ci
       - name: Generated code is current
         run: make verify-generate
+      - name: TypeScript SDK types check
+        run: cd sdk/typescript && npm run typecheck
       - name: Module graph is unchanged by building
         # Deliberately never runs `go mod tidy`: dependencies hold the go directive floor and
         # tidy silently raises it. This only asserts nothing drifted.

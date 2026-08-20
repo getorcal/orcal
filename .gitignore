@@ -6,3 +6,5 @@
 sdk/python/.venv/
 sdk/python/**/__pycache__/
 sdk/python/.pytest_cache/
+sdk/typescript/node_modules/
+sdk/typescript/dist/

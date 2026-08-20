@@ -1,0 +1,24 @@
+{
+  "name": "@orcal/sdk",
+  "version": "0.1.0",
+  "description": "Client for Orcal, self-hosted sandbox infrastructure",
+  "license": "MIT",
+  "type": "module",
+  "engines": { "node": ">=18" },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
+    "test": "node --import tsx --test test/*.test.ts",
+    "test:unit": "node --import tsx --test test/transport.test.ts test/errors.test.ts test/sse.test.ts test/client.test.ts test/pagination.test.ts test/coverage.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.0",
+    "openapi-typescript": "^7.4.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  }
+}
