@@ -304,3 +304,47 @@ jobs:
           if [ "$leaked" != "0" ]; then
             echo "::error::$leaked orcal container(s) left behind"; docker ps -a --filter "label=orcal.managed"; exit 1
           fi
+
+  sdk-typescript:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install the SDK
+        run: cd sdk/typescript && npm ci
+      - name: Generated types are current
+        run: |
+          make generate-ts
+          git diff --exit-code sdk/typescript/src/models.ts
+      - name: Type check
+        run: cd sdk/typescript && npm run typecheck
+      - name: Unit suite
+        run: cd sdk/typescript && npm run test:unit
+      - name: Start orcald
+        run: |
+          make build
+          ORCAL_DATA_DIR=/tmp/orcal-sdk-ts ./bin/orcald > /tmp/orcald.log 2>&1 &
+          for i in $(seq 1 30); do
+            token=$(grep -o 'orcal_[A-Za-z0-9_-]*' /tmp/orcald.log | head -1) && [ -n "$token" ] && break
+            sleep 1
+          done
+          [ -n "$token" ] || { echo "::error::orcald never printed a token"; cat /tmp/orcald.log; exit 1; }
+          echo "ORCAL_TOKEN=$token" >> "$GITHUB_ENV"
+          echo "ORCAL_URL=http://127.0.0.1:8080" >> "$GITHUB_ENV"
+      - name: Live suite
+        run: cd sdk/typescript && npm test
+      - name: No leaked containers
+        if: always()
+        run: |
+          leaked=$(docker ps -aq --filter "label=orcal.managed" | wc -l | tr -d ' ')
+          if [ "$leaked" != "0" ]; then
+            echo "::error::$leaked orcal container(s) left behind"; docker ps -a --filter "label=orcal.managed"; exit 1
+          fi

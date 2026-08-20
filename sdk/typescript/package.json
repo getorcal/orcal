@@ -16,7 +16,9 @@
     "test:unit": "node --import tsx --test test/transport.test.ts test/errors.test.ts test/sse.test.ts test/client.test.ts test/pagination.test.ts test/coverage.test.ts"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^18.19.0",
+    "js-yaml": "^4.3.1",
     "openapi-typescript": "^7.4.0",
     "tsx": "^4.16.0",
     "typescript": "^5.5.0"
