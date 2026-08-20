@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/client"
 
 	"github.com/getorcal/orcal/internal/runtime"
 )
@@ -14,13 +13,13 @@ import (
 const execPollInterval = 100 * time.Millisecond
 
 type session struct {
-	cli      *client.Client
+	cli      apiClient
 	execID   string
 	attached types.HijackedResponse
 	next     func() (runtime.Frame, error)
 }
 
-func newSession(cli *client.Client, execID string, attached types.HijackedResponse) *session {
+func newSession(cli apiClient, execID string, attached types.HijackedResponse) *session {
 	return &session{
 		cli:      cli,
 		execID:   execID,

@@ -29,7 +29,7 @@ func newAuditTestServer(t *testing.T) (*Server, *auth.Service, *audit.Service) {
 
 	f := fake.New()
 	defaults := sandbox.Resources{CPUMillis: 1000, MemoryBytes: 1 << 30, PidsLimit: 512}
-	sandboxes := sandbox.NewService(st.Sandboxes(), f, defaults, sandbox.Networks{Full: "orcal", Isolated: "orcal-isolated"})
+	sandboxes := sandbox.NewService(st.Sandboxes(), f, defaults, sandbox.Networks{Full: "orcal", Isolated: "orcal-isolated"}, "")
 	snapshots := snapshot.NewService(st.Snapshots(), sandboxes, f)
 	sandboxes.SetSnapshots(snapshots)
 
@@ -76,7 +76,7 @@ func newFailingAuditServer(t *testing.T) (*Server, *auth.Service) {
 
 	f := fake.New()
 	defaults := sandbox.Resources{CPUMillis: 1000, MemoryBytes: 1 << 30, PidsLimit: 512}
-	sandboxes := sandbox.NewService(st.Sandboxes(), f, defaults, sandbox.Networks{Full: "orcal", Isolated: "orcal-isolated"})
+	sandboxes := sandbox.NewService(st.Sandboxes(), f, defaults, sandbox.Networks{Full: "orcal", Isolated: "orcal-isolated"}, "")
 
 	tokens := auth.NewService(auth.NewMemoryRepo())
 	events := audit.NewService(failingAuditRepo{}, audit.RetentionPolicy{})

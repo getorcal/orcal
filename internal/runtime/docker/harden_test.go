@@ -89,6 +89,24 @@ func TestHostConfigAttachesToTheOrcalNetwork(t *testing.T) {
 	}
 }
 
+func TestHostConfigCarriesTheResolvedOCIRuntime(t *testing.T) {
+	s := spec()
+	s.OCIRuntime = "runsc"
+	hc := hostConfig(s)
+
+	if hc.Runtime != "runsc" {
+		t.Errorf("Runtime = %q, want runsc", hc.Runtime)
+	}
+}
+
+func TestHostConfigLeavesRuntimeEmptyWhenUnset(t *testing.T) {
+	hc := hostConfig(spec())
+
+	if hc.Runtime != "" {
+		t.Errorf("Runtime = %q, want empty so Docker uses its own default", hc.Runtime)
+	}
+}
+
 func TestDiskQuotaSupportRequiresOverlay2OnXFS(t *testing.T) {
 	cases := []struct {
 		name   string

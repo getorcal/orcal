@@ -72,6 +72,12 @@ func run() error {
 		logger.Warn("disk usage is not limited on this host: overlay2 on xfs with project quotas is required; a sandbox can fill the host disk")
 	}
 
+	ociRuntime, err := rt.ResolveRuntime(ctx, cfg.ContainerRuntime)
+	if err != nil {
+		return fmt.Errorf("container runtime: %w", err)
+	}
+	logger.Info("container runtime resolved", slog.String("runtime", ociRuntime))
+
 	tokens := auth.NewService(store.Tokens())
 	token, generated, err := tokens.Bootstrap(ctx, store.Settings(), cfg.Token)
 	if err != nil {
@@ -86,7 +92,7 @@ func run() error {
 		MemoryBytes: cfg.DefaultMemoryBytes,
 		PidsLimit:   cfg.DefaultPidsLimit,
 	}
-	sandboxes := sandbox.NewService(store.Sandboxes(), rt, defaults, networks)
+	sandboxes := sandbox.NewService(store.Sandboxes(), rt, defaults, networks, ociRuntime)
 	execs, err := exec.NewService(store.Execs(), sandboxes, rt, filepath.Join(cfg.DataDir, "execs"), cfg.ExecOutputMaxBytes)
 	if err != nil {
 		return err

@@ -33,6 +33,9 @@ func toAPISandbox(s *sandbox.Sandbox) apigen.Sandbox {
 	if s.Name != "" {
 		out.Name = ptr(s.Name)
 	}
+	if s.OCIRuntime != "" {
+		out.OciRuntime = ptr(s.OCIRuntime)
+	}
 	if len(s.Env) > 0 {
 		out.Env = ptr(s.Env)
 	}

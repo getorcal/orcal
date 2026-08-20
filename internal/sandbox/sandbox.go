@@ -28,13 +28,14 @@ func ValidateNetwork(n Network) error {
 }
 
 type Sandbox struct {
-	ID        string
-	Name      string
-	Image     string
-	State     State
-	Runtime   string
-	RuntimeID string
-	Network   Network
+	ID         string
+	Name       string
+	Image      string
+	State      State
+	Runtime    string
+	RuntimeID  string
+	OCIRuntime string
+	Network    Network
 
 	ParentSnapshotID *string
 

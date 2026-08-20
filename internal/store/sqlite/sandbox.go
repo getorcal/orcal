@@ -17,7 +17,7 @@ type sandboxRepo struct {
 	db *sql.DB
 }
 
-const sandboxColumns = `id, name, image, state, runtime, runtime_id, cpu_millis, memory_bytes, pids_limit, env, labels, created_at, updated_at, parent_snapshot_id, network`
+const sandboxColumns = `id, name, image, state, runtime, runtime_id, cpu_millis, memory_bytes, pids_limit, env, labels, created_at, updated_at, parent_snapshot_id, network, oci_runtime`
 
 func (r *sandboxRepo) Create(ctx context.Context, s *sandbox.Sandbox) error {
 	env, err := json.Marshal(s.Env)
@@ -29,12 +29,12 @@ func (r *sandboxRepo) Create(ctx context.Context, s *sandbox.Sandbox) error {
 		return fmt.Errorf("sqlite: encode labels: %w", err)
 	}
 	_, err = r.db.ExecContext(ctx,
-		`INSERT INTO sandboxes (`+sandboxColumns+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		`INSERT INTO sandboxes (`+sandboxColumns+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		s.ID, s.Name, s.Image, string(s.State), s.Runtime, s.RuntimeID,
 		s.Resources.CPUMillis, s.Resources.MemoryBytes, s.Resources.PidsLimit,
 		string(env), string(labels),
 		s.CreatedAt.Format(timeFormat), s.UpdatedAt.Format(timeFormat), s.ParentSnapshotID,
-		string(s.Network))
+		string(s.Network), s.OCIRuntime)
 	if err != nil {
 		if isNameUniqueViolation(err) {
 			return fmt.Errorf("%w: %s", sandbox.ErrNameTaken, s.Name)
@@ -116,11 +116,11 @@ func (r *sandboxRepo) Update(ctx context.Context, s *sandbox.Sandbox) error {
 	env, _ := json.Marshal(s.Env)
 	labels, _ := json.Marshal(s.Labels)
 	res, err := r.db.ExecContext(ctx,
-		`UPDATE sandboxes SET name=?, image=?, state=?, runtime=?, runtime_id=?, cpu_millis=?, memory_bytes=?, pids_limit=?, env=?, labels=?, updated_at=?, parent_snapshot_id=?, network=? WHERE id=?`,
+		`UPDATE sandboxes SET name=?, image=?, state=?, runtime=?, runtime_id=?, cpu_millis=?, memory_bytes=?, pids_limit=?, env=?, labels=?, updated_at=?, parent_snapshot_id=?, network=?, oci_runtime=? WHERE id=?`,
 		s.Name, s.Image, string(s.State), s.Runtime, s.RuntimeID,
 		s.Resources.CPUMillis, s.Resources.MemoryBytes, s.Resources.PidsLimit,
 		string(env), string(labels), s.UpdatedAt.Format(timeFormat), s.ParentSnapshotID,
-		string(s.Network), s.ID)
+		string(s.Network), s.OCIRuntime, s.ID)
 	if err != nil {
 		if isNameUniqueViolation(err) {
 			return fmt.Errorf("%w: %s", sandbox.ErrNameTaken, s.Name)
@@ -152,7 +152,7 @@ func scanSandbox(row scanner) (*sandbox.Sandbox, error) {
 	)
 	err := row.Scan(&s.ID, &s.Name, &s.Image, &state, &s.Runtime, &s.RuntimeID,
 		&s.Resources.CPUMillis, &s.Resources.MemoryBytes, &s.Resources.PidsLimit,
-		&env, &labels, &createdAt, &updatedAt, &parentSnapshotID, &network)
+		&env, &labels, &createdAt, &updatedAt, &parentSnapshotID, &network, &s.OCIRuntime)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, sandbox.ErrNotFound
 	}

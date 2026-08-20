@@ -5,19 +5,47 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
+	"strings"
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/api/types/system"
 	"github.com/docker/docker/client"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/getorcal/orcal/internal/runtime"
 )
 
+type apiClient interface {
+	NetworkInspect(ctx context.Context, networkID string, options network.InspectOptions) (network.Inspect, error)
+	NetworkCreate(ctx context.Context, name string, options network.CreateOptions) (network.CreateResponse, error)
+	ContainerCreate(ctx context.Context, config *container.Config, hostConfig *container.HostConfig, networkingConfig *network.NetworkingConfig, platform *ocispec.Platform, containerName string) (container.CreateResponse, error)
+	ImageInspect(ctx context.Context, imageID string, inspectOpts ...client.ImageInspectOption) (image.InspectResponse, error)
+	ImagePull(ctx context.Context, refStr string, options image.PullOptions) (io.ReadCloser, error)
+	ContainerStart(ctx context.Context, containerID string, options container.StartOptions) error
+	ContainerStop(ctx context.Context, containerID string, options container.StopOptions) error
+	ContainerRemove(ctx context.Context, containerID string, options container.RemoveOptions) error
+	ContainerInspect(ctx context.Context, containerID string) (container.InspectResponse, error)
+	ContainerExecCreate(ctx context.Context, containerID string, options container.ExecOptions) (container.ExecCreateResponse, error)
+	ContainerExecAttach(ctx context.Context, execID string, config container.ExecAttachOptions) (types.HijackedResponse, error)
+	ContainerExecInspect(ctx context.Context, execID string) (container.ExecInspect, error)
+	ContainerPause(ctx context.Context, containerID string) error
+	ContainerUnpause(ctx context.Context, containerID string) error
+	ContainerCommit(ctx context.Context, containerID string, options container.CommitOptions) (container.CommitResponse, error)
+	ImageRemove(ctx context.Context, imageID string, options image.RemoveOptions) ([]image.DeleteResponse, error)
+	ContainerStatPath(ctx context.Context, containerID, path string) (container.PathStat, error)
+	CopyFromContainer(ctx context.Context, containerID, srcPath string) (io.ReadCloser, container.PathStat, error)
+	CopyToContainer(ctx context.Context, containerID, dstPath string, content io.Reader, options container.CopyToContainerOptions) error
+	Info(ctx context.Context) (system.Info, error)
+}
+
 type Docker struct {
-	cli *client.Client
+	cli apiClient
 }
 
 func New(host string) (*Docker, error) {
@@ -30,6 +58,26 @@ func New(host string) (*Docker, error) {
 		return nil, fmt.Errorf("%w: %v", runtime.ErrUnavailable, err)
 	}
 	return &Docker{cli: cli}, nil
+}
+
+func (d *Docker) ResolveRuntime(ctx context.Context, configured string) (string, error) {
+	info, err := d.cli.Info(ctx)
+	if err != nil {
+		return "", translate(err)
+	}
+	if configured == "" {
+		return info.DefaultRuntime, nil
+	}
+	if _, ok := info.Runtimes[configured]; !ok {
+		available := make([]string, 0, len(info.Runtimes))
+		for name := range info.Runtimes {
+			available = append(available, name)
+		}
+		sort.Strings(available)
+		return "", fmt.Errorf("%w: runtime %q is not registered with this daemon; available: %s",
+			runtime.ErrInvalidSpec, configured, strings.Join(available, ", "))
+	}
+	return configured, nil
 }
 
 func (d *Docker) EnsureNetwork(ctx context.Context, name string, internal bool) error {

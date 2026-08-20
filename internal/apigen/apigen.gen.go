@@ -326,6 +326,7 @@ type Sandbox struct {
 
 	// Network full allows egress; none attaches an internal network with no route off the bridge
 	Network          Network      `json:"network"`
+	OciRuntime       *string      `json:"oci_runtime,omitempty"`
 	ParentSnapshotId *string      `json:"parent_snapshot_id,omitempty"`
 	Resources        Resources    `json:"resources"`
 	Runtime          string       `json:"runtime"`

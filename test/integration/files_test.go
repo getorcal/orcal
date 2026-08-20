@@ -31,24 +31,6 @@ func containsFile(items []apigen.FileInfo, name string) bool {
 	return false
 }
 
-func archiveContains(t *testing.T, rc io.ReadCloser, name string) bool {
-	t.Helper()
-	defer rc.Close()
-	tr := tar.NewReader(rc)
-	for {
-		h, err := tr.Next()
-		if errors.Is(err, io.EOF) {
-			return false
-		}
-		if err != nil {
-			t.Fatalf("read archive: %v", err)
-		}
-		if h.Name == name {
-			return true
-		}
-	}
-}
-
 func buildTar(t *testing.T, entries map[string][]byte, modes map[string]int64) []byte {
 	t.Helper()
 	var buf bytes.Buffer

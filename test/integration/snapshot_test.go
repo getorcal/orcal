@@ -12,16 +12,6 @@ import (
 	"github.com/getorcal/orcal/pkg/orcalclient"
 )
 
-func (e *env) snapshot(t *testing.T, sandboxRef, name string) string {
-	t.Helper()
-	snap, err := e.client.CreateSnapshot(context.Background(), sandboxRef, orcalclient.CreateSnapshotParams{Name: name})
-	if err != nil {
-		t.Fatalf("CreateSnapshot(%s) error = %v", sandboxRef, err)
-	}
-	e.snapshots = append(e.snapshots, snap.Id)
-	return snap.Id
-}
-
 func TestSnapshotLeavesTheSandboxRunning(t *testing.T) {
 	e := newEnv(t)
 	e.sandbox(t, "snap-running")

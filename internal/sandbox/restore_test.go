@@ -122,7 +122,7 @@ func TestForkDoesNotClobberAConcurrentChangeToTheForkedSandbox(t *testing.T) {
 	}
 
 	defaults := sandbox.Resources{CPUMillis: 1000, MemoryBytes: 1 << 30, PidsLimit: 512}
-	svc := sandbox.NewService(repo, fake.New(), defaults, sandbox.Networks{Full: "orcal", Isolated: "orcal-isolated"})
+	svc := sandbox.NewService(repo, fake.New(), defaults, sandbox.Networks{Full: "orcal", Isolated: "orcal-isolated"}, "")
 	svc.SetSnapshots(stubSnapshots{ref: "sha256:snap", id: "sn-1"})
 	ctx := context.Background()
 
@@ -187,6 +187,38 @@ func TestRestorePreservesTheNetworkMode(t *testing.T) {
 	}
 	if got := f.LastCreateSpec().NetworkName; got != "orcal-isolated" {
 		t.Errorf("spec.NetworkName = %q, want orcal-isolated - a restored none sandbox must not regain internet access", got)
+	}
+}
+
+func TestRestoreReportsTheRuntimeItIsActuallyRunningUnderRatherThanTheOneItHadBefore(t *testing.T) {
+	st, err := sqlite.Open(filepath.Join(t.TempDir(), "orcal.db"))
+	if err != nil {
+		t.Fatalf("sqlite.Open() error = %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+	repo := st.Sandboxes()
+
+	defaults := sandbox.Resources{CPUMillis: 1000, MemoryBytes: 1 << 30, PidsLimit: 512}
+	svc := sandbox.NewService(repo, fake.New(), defaults, sandbox.Networks{Full: "orcal", Isolated: "orcal-isolated"}, "runsc")
+	svc.SetSnapshots(stubSnapshots{ref: "sha256:snap", id: "sn-1"})
+	ctx := context.Background()
+
+	original, err := svc.Create(ctx, sandbox.CreateOptions{Name: "my-agent", Image: "alpine:3.20"})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	original.OCIRuntime = "stale-runtime"
+	if err := repo.Update(ctx, original); err != nil {
+		t.Fatalf("seed stale OCIRuntime: %v", err)
+	}
+
+	restored, err := svc.Restore(ctx, "my-agent", "working-v1")
+	if err != nil {
+		t.Fatalf("Restore() error = %v", err)
+	}
+	if restored.OCIRuntime != "runsc" {
+		t.Errorf("restored.OCIRuntime = %q, want runsc (the runtime actually in use), not the stale value it had before", restored.OCIRuntime)
 	}
 }
 

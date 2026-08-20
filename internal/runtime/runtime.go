@@ -28,6 +28,7 @@ type CreateSpec struct {
 	MemoryBytes int64
 	PidsLimit   int
 	NetworkName string
+	OCIRuntime  string
 }
 
 type ExecSpec struct {

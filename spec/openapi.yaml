@@ -491,6 +491,7 @@ components:
           type: string
           enum: [creating, running, stopped, destroying, destroyed, error]
         runtime: { type: string }
+        oci_runtime: { type: string }
         resources: { $ref: "#/components/schemas/Resources" }
         network: { $ref: "#/components/schemas/Network" }
         env:

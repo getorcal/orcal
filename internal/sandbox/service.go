@@ -45,25 +45,27 @@ func (n Networks) nameFor(mode Network) string {
 }
 
 type Service struct {
-	repo      Repo
-	rt        runtime.Runtime
-	defaults  Resources
-	networks  Networks
-	locks     *keyedMutex
-	now       func() time.Time
-	newID     func() string
-	snapshots SnapshotLookup
+	repo       Repo
+	rt         runtime.Runtime
+	defaults   Resources
+	networks   Networks
+	ociRuntime string
+	locks      *keyedMutex
+	now        func() time.Time
+	newID      func() string
+	snapshots  SnapshotLookup
 }
 
-func NewService(repo Repo, rt runtime.Runtime, defaults Resources, networks Networks) *Service {
+func NewService(repo Repo, rt runtime.Runtime, defaults Resources, networks Networks, ociRuntime string) *Service {
 	return &Service{
-		repo:     repo,
-		rt:       rt,
-		defaults: defaults,
-		networks: networks,
-		locks:    newKeyedMutex(),
-		now:      func() time.Time { return time.Now().UTC() },
-		newID:    id.New,
+		repo:       repo,
+		rt:         rt,
+		defaults:   defaults,
+		networks:   networks,
+		ociRuntime: ociRuntime,
+		locks:      newKeyedMutex(),
+		now:        func() time.Time { return time.Now().UTC() },
+		newID:      id.New,
 	}
 }
 
@@ -101,17 +103,18 @@ func (s *Service) Create(ctx context.Context, opts CreateOptions) (*Sandbox, err
 
 	now := s.now()
 	sb := &Sandbox{
-		ID:        s.newID(),
-		Name:      opts.Name,
-		Image:     opts.Image,
-		State:     StateCreating,
-		Runtime:   runtimeName,
-		Resources: res,
-		Env:       opts.Env,
-		Labels:    opts.Labels,
-		Network:   opts.Network,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:         s.newID(),
+		Name:       opts.Name,
+		Image:      opts.Image,
+		State:      StateCreating,
+		Runtime:    runtimeName,
+		OCIRuntime: s.ociRuntime,
+		Resources:  res,
+		Env:        opts.Env,
+		Labels:     opts.Labels,
+		Network:    opts.Network,
+		CreatedAt:  now,
+		UpdatedAt:  now,
 	}
 	if sb.Env == nil {
 		sb.Env = map[string]string{}
@@ -136,6 +139,7 @@ func (s *Service) Create(ctx context.Context, opts CreateOptions) (*Sandbox, err
 		MemoryBytes: res.MemoryBytes,
 		PidsLimit:   res.PidsLimit,
 		NetworkName: s.networks.nameFor(opts.Network),
+		OCIRuntime:  s.ociRuntime,
 	})
 	if err != nil {
 		return nil, s.markError(ctx, sb, err)
@@ -428,6 +432,7 @@ func (s *Service) Restore(ctx context.Context, sandboxRef, snapshotRef string) (
 		MemoryBytes: sb.Resources.MemoryBytes,
 		PidsLimit:   sb.Resources.PidsLimit,
 		NetworkName: s.networks.nameFor(sb.Network),
+		OCIRuntime:  s.ociRuntime,
 	})
 	if err != nil {
 		return nil, s.markError(ctx, sb, err)
@@ -447,6 +452,7 @@ func (s *Service) Restore(ctx context.Context, sandboxRef, snapshotRef string) (
 	}
 
 	sb.State = StateRunning
+	sb.OCIRuntime = s.ociRuntime
 	sb.ParentSnapshotID = &resolved.ID
 	sb.UpdatedAt = s.now()
 	if err := s.repo.Update(ctx, sb); err != nil {

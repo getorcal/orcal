@@ -18,6 +18,11 @@ import (
 
 func newService(t *testing.T) (*sandbox.Service, *fake.Fake) {
 	t.Helper()
+	return newServiceWithOCIRuntime(t, "")
+}
+
+func newServiceWithOCIRuntime(t *testing.T, ociRuntime string) (*sandbox.Service, *fake.Fake) {
+	t.Helper()
 	st, err := sqlite.Open(filepath.Join(t.TempDir(), "orcal.db"))
 	if err != nil {
 		t.Fatalf("sqlite.Open() error = %v", err)
@@ -25,7 +30,7 @@ func newService(t *testing.T) (*sandbox.Service, *fake.Fake) {
 	t.Cleanup(func() { st.Close() })
 	f := fake.New()
 	defaults := sandbox.Resources{CPUMillis: 1000, MemoryBytes: 1 << 30, PidsLimit: 512}
-	return sandbox.NewService(st.Sandboxes(), f, defaults, sandbox.Networks{Full: "orcal", Isolated: "orcal-isolated"}), f
+	return sandbox.NewService(st.Sandboxes(), f, defaults, sandbox.Networks{Full: "orcal", Isolated: "orcal-isolated"}, ociRuntime), f
 }
 
 func newServiceWithRuntime(t *testing.T, rt runtime.Runtime) *sandbox.Service {
@@ -36,7 +41,7 @@ func newServiceWithRuntime(t *testing.T, rt runtime.Runtime) *sandbox.Service {
 	}
 	t.Cleanup(func() { st.Close() })
 	defaults := sandbox.Resources{CPUMillis: 1000, MemoryBytes: 1 << 30, PidsLimit: 512}
-	return sandbox.NewService(st.Sandboxes(), rt, defaults, sandbox.Networks{Full: "orcal", Isolated: "orcal-isolated"})
+	return sandbox.NewService(st.Sandboxes(), rt, defaults, sandbox.Networks{Full: "orcal", Isolated: "orcal-isolated"}, "")
 }
 
 type erroringRuntime struct {
@@ -156,6 +161,21 @@ func TestCreatePassesHardeningRelevantSpecToRuntime(t *testing.T) {
 	}
 	if spec.Env["A"] != "1" {
 		t.Errorf("spec.Env = %v, want A=1", spec.Env)
+	}
+}
+
+func TestCreateSetsOCIRuntimeOnTheSandboxAndTheRuntimeSpec(t *testing.T) {
+	svc, f := newServiceWithOCIRuntime(t, "runsc")
+
+	created, err := svc.Create(context.Background(), sandbox.CreateOptions{Image: "alpine"})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if created.OCIRuntime != "runsc" {
+		t.Errorf("Sandbox.OCIRuntime = %q, want runsc", created.OCIRuntime)
+	}
+	if spec := f.LastCreateSpec(); spec.OCIRuntime != "runsc" {
+		t.Errorf("spec.OCIRuntime = %q, want runsc", spec.OCIRuntime)
 	}
 }
 
@@ -362,7 +382,7 @@ func TestCreateSerializesAgainstConcurrentStart(t *testing.T) {
 		}
 		rt := &spyRuntime{Fake: fake.New()}
 		defaults := sandbox.Resources{CPUMillis: 1000, MemoryBytes: 1 << 30, PidsLimit: 512}
-		svc := sandbox.NewService(st.Sandboxes(), rt, defaults, sandbox.Networks{Full: "orcal", Isolated: "orcal-isolated"})
+		svc := sandbox.NewService(st.Sandboxes(), rt, defaults, sandbox.Networks{Full: "orcal", Isolated: "orcal-isolated"}, "")
 		ctx := context.Background()
 		name := fmt.Sprintf("race-%d", i)
 

@@ -37,7 +37,7 @@ func newClient(t *testing.T) (*orcalclient.Client, *fake.Fake, *exec.Service) {
 	f := fake.New()
 	sandboxes := sandbox.NewService(st.Sandboxes(), f,
 		sandbox.Resources{CPUMillis: 1000, MemoryBytes: 1 << 30, PidsLimit: 512},
-		sandbox.Networks{Full: "orcal", Isolated: "orcal-isolated"})
+		sandbox.Networks{Full: "orcal", Isolated: "orcal-isolated"}, "")
 	execs, err := exec.NewService(st.Execs(), sandboxes, f, filepath.Join(dir, "execs"), 1<<20)
 	if err != nil {
 		t.Fatalf("exec.NewService() error = %v", err)

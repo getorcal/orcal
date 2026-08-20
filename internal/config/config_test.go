@@ -6,6 +6,7 @@ func TestLoadUsesDefaultsWhenEnvUnset(t *testing.T) {
 	t.Setenv("ORCAL_ADDR", "")
 	t.Setenv("ORCAL_DATA_DIR", "")
 	t.Setenv("ORCAL_EXEC_OUTPUT_MAX_BYTES", "")
+	t.Setenv("ORCAL_CONTAINER_RUNTIME", "")
 
 	c, err := Load()
 	if err != nil {
@@ -32,12 +33,16 @@ func TestLoadUsesDefaultsWhenEnvUnset(t *testing.T) {
 	if c.NetworkName != "orcal" {
 		t.Errorf("NetworkName = %q, want orcal", c.NetworkName)
 	}
+	if c.ContainerRuntime != "" {
+		t.Errorf("ContainerRuntime = %q, want empty so the daemon reports its own default rather than a hardcoded one", c.ContainerRuntime)
+	}
 }
 
 func TestLoadReadsEnvOverrides(t *testing.T) {
 	t.Setenv("ORCAL_ADDR", "0.0.0.0:9000")
 	t.Setenv("ORCAL_DATA_DIR", "/tmp/orcal")
 	t.Setenv("ORCAL_EXEC_OUTPUT_MAX_BYTES", "1024")
+	t.Setenv("ORCAL_CONTAINER_RUNTIME", "runsc")
 
 	c, err := Load()
 	if err != nil {
@@ -51,6 +56,9 @@ func TestLoadReadsEnvOverrides(t *testing.T) {
 	}
 	if c.ExecOutputMaxBytes != 1024 {
 		t.Errorf("ExecOutputMaxBytes = %d, want 1024", c.ExecOutputMaxBytes)
+	}
+	if c.ContainerRuntime != "runsc" {
+		t.Errorf("ContainerRuntime = %q, want runsc", c.ContainerRuntime)
 	}
 }
 

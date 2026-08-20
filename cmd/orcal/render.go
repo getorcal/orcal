@@ -123,12 +123,17 @@ func renderSandboxInspect(w io.Writer, format string, s *apigen.Sandbox) error {
 	if s.Name != nil {
 		name = *s.Name
 	}
+	ociRuntime := "-"
+	if s.OciRuntime != nil {
+		ociRuntime = *s.OciRuntime
+	}
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	fmt.Fprintf(tw, "id:\t%s\n", s.Id)
 	fmt.Fprintf(tw, "name:\t%s\n", name)
 	fmt.Fprintf(tw, "image:\t%s\n", s.Image)
 	fmt.Fprintf(tw, "state:\t%s\n", s.State)
 	fmt.Fprintf(tw, "runtime:\t%s\n", s.Runtime)
+	fmt.Fprintf(tw, "oci_runtime:\t%s\n", ociRuntime)
 	fmt.Fprintf(tw, "network:\t%s\n", s.Network)
 	fmt.Fprintf(tw, "cpu_millis:\t%d\n", s.Resources.CpuMillis)
 	fmt.Fprintf(tw, "memory_bytes:\t%d\n", s.Resources.MemoryBytes)

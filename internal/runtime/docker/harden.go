@@ -10,6 +10,7 @@ import (
 func hostConfig(spec runtime.CreateSpec) *container.HostConfig {
 	pids := int64(spec.PidsLimit)
 	return &container.HostConfig{
+		Runtime:     spec.OCIRuntime,
 		CapDrop:     strslice.StrSlice{"ALL"},
 		SecurityOpt: []string{"no-new-privileges:true"},
 		NetworkMode: container.NetworkMode(spec.NetworkName),

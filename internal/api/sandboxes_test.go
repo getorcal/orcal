@@ -32,6 +32,11 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
+	return newHarnessWithOCIRuntime(t, "")
+}
+
+func newHarnessWithOCIRuntime(t *testing.T, ociRuntime string) *harness {
+	t.Helper()
 	dir := t.TempDir()
 	st, err := sqlite.Open(filepath.Join(dir, "orcal.db"))
 	if err != nil {
@@ -41,7 +46,7 @@ func newHarness(t *testing.T) *harness {
 
 	f := fake.New()
 	defaults := sandbox.Resources{CPUMillis: 1000, MemoryBytes: 1 << 30, PidsLimit: 512}
-	sandboxes := sandbox.NewService(st.Sandboxes(), f, defaults, sandbox.Networks{Full: "orcal", Isolated: "orcal-isolated"})
+	sandboxes := sandbox.NewService(st.Sandboxes(), f, defaults, sandbox.Networks{Full: "orcal", Isolated: "orcal-isolated"}, ociRuntime)
 	execs, err := exec.NewService(st.Execs(), sandboxes, f, filepath.Join(dir, "execs"), 1<<20)
 	if err != nil {
 		t.Fatalf("exec.NewService() error = %v", err)
@@ -155,6 +160,32 @@ func TestCreateSandboxReturns201AndRunningState(t *testing.T) {
 	}
 	if got.Id == "" {
 		t.Error("id is empty")
+	}
+}
+
+func TestCreateSandboxReportsTheDaemonsConfiguredOCIRuntime(t *testing.T) {
+	h := newHarnessWithOCIRuntime(t, "runsc")
+
+	got := createSandbox(t, h, "gvisor-agent")
+
+	if got.OciRuntime == nil || *got.OciRuntime != "runsc" {
+		t.Errorf("oci_runtime = %v, want runsc", got.OciRuntime)
+	}
+}
+
+func TestCreateSandboxRequestCannotOverrideTheConfiguredOCIRuntime(t *testing.T) {
+	h := newHarnessWithOCIRuntime(t, "runsc")
+
+	resp := h.do(t, http.MethodPost, "/v1/sandboxes", map[string]any{
+		"name": "no-downgrade", "image": "alpine", "oci_runtime": "runc",
+	})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d, want 201", resp.StatusCode)
+	}
+	got := decode[apigen.Sandbox](t, resp)
+
+	if got.OciRuntime == nil || *got.OciRuntime != "runsc" {
+		t.Errorf("oci_runtime = %v, want runsc — a request body must not be able to weaken the daemon's configured isolation", got.OciRuntime)
 	}
 }
 

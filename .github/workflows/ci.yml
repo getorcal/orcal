@@ -125,6 +125,44 @@ jobs:
             exit 1
           fi
 
+  gvisor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+          cache: true
+      - name: Install gVisor
+        run: |
+          curl -fsSL https://gvisor.dev/archive.key | sudo gpg --dearmor -o /usr/share/keyrings/gvisor-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/gvisor-archive-keyring.gpg] https://storage.googleapis.com/gvisor/releases release main" | sudo tee /etc/apt/sources.list.d/gvisor.list > /dev/null
+          sudo apt-get update && sudo apt-get install -y runsc
+          sudo runsc install
+          sudo systemctl restart docker
+          docker info --format '{{.Runtimes}}'
+      - name: gVisor suite
+        env:
+          ORCAL_CONTAINER_RUNTIME: runsc
+        run: |
+          set -o pipefail
+          go test -tags gvisor ./test/integration/... -count=1 -timeout 25m -v 2>&1 | tee gvisor.log
+          if grep -q "no Docker daemon available" gvisor.log; then
+            echo "::error::gvisor tests skipped - the runtime was never exercised"; exit 1
+          fi
+          if ! grep -q -- "--- PASS" gvisor.log; then
+            echo "::error::no gvisor test reported a pass"; exit 1
+          fi
+      - name: No leaked containers
+        if: always()
+        run: |
+          leaked=$(docker ps -aq --filter "label=orcal.managed" | wc -l | tr -d ' ')
+          if [ "$leaked" != "0" ]; then
+            echo "::error::$leaked orcal container(s) left behind"; exit 1
+          fi
+
   image:
     runs-on: ubuntu-latest
     steps:

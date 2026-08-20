@@ -11,6 +11,7 @@ type Config struct {
 	DataDir            string
 	Token              string
 	DockerHost         string
+	ContainerRuntime   string
 	ExecOutputMaxBytes int64
 	DefaultCPUMillis   int
 	DefaultMemoryBytes int64
@@ -26,11 +27,12 @@ type Config struct {
 
 func Load() (Config, error) {
 	c := Config{
-		Addr:        envString("ORCAL_ADDR", "127.0.0.1:8080"),
-		DataDir:     envString("ORCAL_DATA_DIR", "/var/lib/orcal"),
-		Token:       envString("ORCAL_TOKEN", ""),
-		DockerHost:  envString("ORCAL_DOCKER_HOST", ""),
-		NetworkName: envString("ORCAL_NETWORK_NAME", "orcal"),
+		Addr:             envString("ORCAL_ADDR", "127.0.0.1:8080"),
+		DataDir:          envString("ORCAL_DATA_DIR", "/var/lib/orcal"),
+		Token:            envString("ORCAL_TOKEN", ""),
+		DockerHost:       envString("ORCAL_DOCKER_HOST", ""),
+		ContainerRuntime: envString("ORCAL_CONTAINER_RUNTIME", ""),
+		NetworkName:      envString("ORCAL_NETWORK_NAME", "orcal"),
 	}
 
 	var err error

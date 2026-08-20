@@ -1,0 +1,1 @@
+ALTER TABLE sandboxes ADD COLUMN oci_runtime TEXT NOT NULL DEFAULT '';
