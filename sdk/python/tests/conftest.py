@@ -57,11 +57,14 @@ class Recorder:
     def __init__(self, routes):
         self.routes = routes
         self.calls = []
+        self.targets = []
         self.requests = []
 
     def __call__(self, request):
-        path = request.url.raw_path.decode().split("?", 1)[0]
+        target = request.url.raw_path.decode()
+        path = target.split("?", 1)[0]
         self.calls.append((request.method, path, request.content))
+        self.targets.append((request.method, target))
         self.requests.append(request)
         key = (request.method, path)
         handler = self.routes.get(key)

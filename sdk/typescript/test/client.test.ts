@@ -1,7 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { deepEqual as looseDeepEqual } from "node:assert";
 import { Orcal } from "../src/client.js";
 import { Snapshot } from "../src/snapshot.js";
+import type { Sandbox } from "../src/sandbox.js";
 import type { Sandbox as SandboxModel } from "../src/types.js";
 
 const sandboxPayload = (id = "sb-1", network: SandboxModel["network"] = "full"): SandboxModel => ({
@@ -29,17 +31,19 @@ const snapshotPayload = (id = "snap-1", sandboxId = "sb-1") => ({
 
 function router(routes: Record<string, (init: RequestInit, url: URL) => Response>) {
   const calls: string[] = [];
+  const targets: string[] = [];
   const impl = async (input: string | URL, init: RequestInit = {}) => {
     const url = new URL(String(input));
     const key = `${init.method ?? "GET"} ${url.pathname}`;
     calls.push(key);
+    targets.push(`${key}${url.search}`);
     const handler = routes[key];
     if (!handler) {
       return new Response(JSON.stringify({ error: { code: "sandbox_not_found", message: key, details: {} } }), { status: 404 });
     }
     return handler(init, url);
   };
-  return { impl: impl as unknown as typeof fetch, calls };
+  return { impl: impl as unknown as typeof fetch, calls, targets };
 }
 
 const ok = (payload: unknown, status = 200) =>
@@ -329,6 +333,18 @@ test("createToken omits expires_in_seconds when not supplied", async () => {
   assert.deepEqual(JSON.parse(body), { name: "ci", scopes: ["admin"] });
 });
 
+test("createToken posts every scope it was given", async () => {
+  let body = "";
+  const { impl } = router({
+    "POST /v1/tokens": (init) => {
+      body = String(init.body);
+      return ok({ id: "tok-1", name: "ci", prefix: "orcal_", scopes: ["admin"], created_at: "2026-08-20T10:00:00Z", token: "x" }, 201);
+    },
+  });
+  await client(impl).createToken("ci", ["sandboxes:read", "exec", "files:write"]);
+  assert.deepEqual(JSON.parse(body).scopes, ["sandboxes:read", "exec", "files:write"]);
+});
+
 test("listTokens issues a GET and unwraps items", async () => {
   const { impl, calls } = router({
     "GET /v1/tokens": () =>
@@ -531,6 +547,58 @@ test("files.download reads the archive endpoint and returns bytes", async () => 
   assert.deepEqual(Array.from(data), [9, 8, 7]);
   assert.deepEqual(calls, ["GET /v1/sandboxes/sb-1/archive"]);
 });
+
+test("a file listing deep-equals the plain array of its entries", async () => {
+  const entries = [fileEntry("a.txt"), fileEntry("b.txt")];
+  const { impl } = listRoute({ items: entries, truncated: true });
+  const sb = client(impl)._fromPayload(sandboxPayload());
+  const listing = await sb.files.list("/");
+  looseDeepEqual(listing, entries);
+  assert.deepEqual(Object.keys(listing), ["0", "1"]);
+  assert.equal(listing.truncated, true);
+});
+
+const fileOperations: Record<string, { route: string; respond: () => Response; call: (sb: Sandbox, path: string) => Promise<unknown> }> = {
+  read: {
+    route: "GET /v1/sandboxes/sb-1/files",
+    respond: () => new Response(new Uint8Array([1]), { status: 200 }),
+    call: (sb, path) => sb.files.read(path),
+  },
+  write: {
+    route: "PUT /v1/sandboxes/sb-1/files",
+    respond: () => new Response(null, { status: 204 }),
+    call: (sb, path) => sb.files.write(path, "hi"),
+  },
+  stat: {
+    route: "GET /v1/sandboxes/sb-1/files/stat",
+    respond: () => ok(fileEntry("a.txt")),
+    call: (sb, path) => sb.files.stat(path),
+  },
+  list: {
+    route: "GET /v1/sandboxes/sb-1/files/list",
+    respond: () => ok({ items: [], truncated: false }),
+    call: (sb, path) => sb.files.list(path),
+  },
+  download: {
+    route: "GET /v1/sandboxes/sb-1/archive",
+    respond: () => new Response(new Uint8Array([1]), { status: 200 }),
+    call: (sb, path) => sb.files.download(path),
+  },
+  upload: {
+    route: "PUT /v1/sandboxes/sb-1/archive",
+    respond: () => new Response(null, { status: 204 }),
+    call: (sb, path) => sb.files.upload(path, new Uint8Array([1])),
+  },
+};
+
+for (const [operation, { route, respond, call }] of Object.entries(fileOperations)) {
+  test(`files.${operation} asks for the path it was given`, async () => {
+    const { impl, targets } = router({ [route]: respond });
+    const sb = client(impl)._fromPayload(sandboxPayload());
+    await call(sb, "/app/config.json");
+    assert.deepEqual(targets, [`${route}?path=%2Fapp%2Fconfig.json`]);
+  });
+}
 
 test("files.upload puts raw bytes to the archive endpoint", async () => {
   let received: Uint8Array | undefined;

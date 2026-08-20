@@ -70,6 +70,46 @@ def test_a_list_command_is_passed_through_as_argv(make_client):
     assert seen["body"]["command"] == ["echo", "hi"]
 
 
+def exited_output(request):
+    return httpx.Response(
+        200,
+        content=sse(event("exit", {"state": "exited", "exit_code": 0, "truncated": False})),
+        headers={"content-type": "text/event-stream"},
+    )
+
+
+def create_body(make_client):
+    seen = {}
+
+    def create(request):
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(201, json=exec_payload())
+
+    routes = {
+        ("POST", "/v1/sandboxes/sb-1/execs"): create,
+        ("GET", "/v1/execs/ex-1/output"): exited_output,
+    }
+    client, _ = make_client(routes)
+    return orcal.Sandbox._from_payload(client, sandbox_payload()), seen
+
+
+def test_exec_sends_every_option_it_was_given(make_client):
+    sb, seen = create_body(make_client)
+    sb.exec("echo hi", env={"TOKEN": "s3cret"}, working_dir="/srv/app", user="1000:1000")
+    assert seen["body"] == {
+        "command": ["sh", "-c", "echo hi"],
+        "env": {"TOKEN": "s3cret"},
+        "working_dir": "/srv/app",
+        "user": "1000:1000",
+    }
+
+
+def test_exec_omits_the_options_that_were_not_given(make_client):
+    sb, seen = create_body(make_client)
+    sb.exec("echo hi")
+    assert seen["body"] == {"command": ["sh", "-c", "echo hi"]}
+
+
 def test_buffered_exec_decodes_base64_and_splits_streams(make_client):
     stream_body = sse(
         event("output", {"offset": 5, "stream": "stdout", "data": base64.b64encode(b"out").decode()}),

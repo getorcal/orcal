@@ -86,6 +86,29 @@ test("an array command is passed through as exact argv", async () => {
   assert.deepEqual(parsed.command, ["echo", "hi"]);
 });
 
+test("exec sends every option it was given", async () => {
+  let body = "";
+  const sb = harness(evt("exit", { state: "exited", exit_code: 0, truncated: false }), (init) => {
+    body = String(init.body);
+  });
+  await sb.exec("echo hi", { env: { TOKEN: "s3cret" }, workingDir: "/srv/app", user: "1000:1000" });
+  assert.deepEqual(JSON.parse(body), {
+    command: ["sh", "-c", "echo hi"],
+    env: { TOKEN: "s3cret" },
+    working_dir: "/srv/app",
+    user: "1000:1000",
+  });
+});
+
+test("exec omits the options that were not given", async () => {
+  let body = "";
+  const sb = harness(evt("exit", { state: "exited", exit_code: 0, truncated: false }), (init) => {
+    body = String(init.body);
+  });
+  await sb.exec("echo hi");
+  assert.deepEqual(JSON.parse(body), { command: ["sh", "-c", "echo hi"] });
+});
+
 test("buffered exec decodes base64 and splits streams", async () => {
   const sb = harness(
     evt("output", { offset: 5, stream: "stdout", data: b64("out") }) +

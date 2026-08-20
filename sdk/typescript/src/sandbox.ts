@@ -5,7 +5,12 @@ import { collectExec, ExecStream, type ExecOptions, type ExecResult } from "./ex
 import { paginate } from "./pagination.js";
 
 export class FileListing extends Array<FileInfo> {
-  truncated = false;
+  declare truncated: boolean;
+
+  constructor(...items: FileInfo[]) {
+    super(...items);
+    Object.defineProperty(this, "truncated", { value: false, writable: true, enumerable: false, configurable: true });
+  }
 
   static get [Symbol.species](): ArrayConstructor {
     return Array;

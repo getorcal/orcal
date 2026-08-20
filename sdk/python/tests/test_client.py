@@ -187,6 +187,13 @@ def test_create_token_omits_the_expiry_when_it_is_not_supplied(make_client):
     assert body_of(recorder, "POST", "/v1/tokens") == {"name": "ci", "scopes": ["admin"]}
 
 
+def test_create_token_posts_every_scope_it_was_given(make_client):
+    created = dict(token_payload(), token="orcal_secretvalue")
+    client, recorder = make_client({("POST", "/v1/tokens"): lambda r: httpx.Response(201, json=created)})
+    client.create_token("ci", ["sandboxes:read", "exec", "files:write"])
+    assert body_of(recorder, "POST", "/v1/tokens")["scopes"] == ["sandboxes:read", "exec", "files:write"]
+
+
 def test_list_tokens_gets_the_collection_and_unwraps_items(make_client):
     client, recorder = make_client({("GET", "/v1/tokens"): lambda r: httpx.Response(200, json={"items": [token_payload()]})})
     tokens = client.list_tokens()
@@ -414,6 +421,60 @@ def test_files_upload_puts_the_tar_bytes_to_the_archive_endpoint(make_client):
     sb = orcal.Sandbox._from_payload(client, sandbox_payload())
     sb.files.upload("/dir", b"\x01\x02\x03")
     assert recorder.calls == [("PUT", "/v1/sandboxes/sb-1/archive", b"\x01\x02\x03")]
+
+
+def test_a_file_listing_equals_the_plain_list_of_its_entries(make_client):
+    entries = [file_info_payload("a.txt"), file_info_payload("b.txt")]
+    listing = {"items": entries, "truncated": True}
+    client, _ = make_client({("GET", "/v1/sandboxes/sb-1/files/list"): lambda r: httpx.Response(200, json=listing)})
+    sb = orcal.Sandbox._from_payload(client, sandbox_payload())
+    result = sb.files.list("/")
+    assert result == [orcal.models.FileInfo(**entry) for entry in entries]
+    assert result.truncated is True
+
+
+FILE_OPERATIONS = {
+    "read": (
+        ("GET", "/v1/sandboxes/sb-1/files"),
+        lambda r: httpx.Response(200, content=b"x"),
+        lambda files, path: files.read(path),
+    ),
+    "write": (
+        ("PUT", "/v1/sandboxes/sb-1/files"),
+        lambda r: httpx.Response(204),
+        lambda files, path: files.write(path, "hi"),
+    ),
+    "stat": (
+        ("GET", "/v1/sandboxes/sb-1/files/stat"),
+        lambda r: httpx.Response(200, json=file_info_payload()),
+        lambda files, path: files.stat(path),
+    ),
+    "list": (
+        ("GET", "/v1/sandboxes/sb-1/files/list"),
+        lambda r: httpx.Response(200, json={"items": [], "truncated": False}),
+        lambda files, path: files.list(path),
+    ),
+    "download": (
+        ("GET", "/v1/sandboxes/sb-1/archive"),
+        lambda r: httpx.Response(200, content=b"x"),
+        lambda files, path: files.download(path),
+    ),
+    "upload": (
+        ("PUT", "/v1/sandboxes/sb-1/archive"),
+        lambda r: httpx.Response(204),
+        lambda files, path: files.upload(path, b"\x01"),
+    ),
+}
+
+
+@pytest.mark.parametrize("operation", sorted(FILE_OPERATIONS))
+def test_a_file_operation_asks_for_the_path_it_was_given(make_client, operation):
+    route, responder, call = FILE_OPERATIONS[operation]
+    method, path = route
+    client, recorder = make_client({route: responder})
+    sb = orcal.Sandbox._from_payload(client, sandbox_payload())
+    call(sb.files, "/app/config.json")
+    assert recorder.targets == [(method, f"{path}?path=%2Fapp%2Fconfig.json")]
 
 
 ADDITIVE_CASES = {
