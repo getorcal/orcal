@@ -110,7 +110,8 @@ class Sandbox:
         if user:
             body["user"] = user
         created = self._client._transport.request("POST", f"/v1/sandboxes/{self._ref()}/execs", json=body).json()
-        handle = ExecStream(self._client, created["id"])
+        raw = models.Exec(**created)
+        handle = ExecStream(self._client, raw.id)
         if stream:
             return handle
         out = []
@@ -123,6 +124,7 @@ class Sandbox:
             stderr=b"".join(err).decode("utf-8", errors="replace"),
             exit_code=handle.exit_code,
             truncated=handle.truncated,
+            raw=raw,
             gaps=list(handle.gaps),
         )
 

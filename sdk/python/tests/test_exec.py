@@ -129,3 +129,71 @@ def test_a_gap_is_surfaced_not_swallowed(make_client):
     list(stream)
     assert stream.gaps == [4]
     assert stream.truncated is True
+
+
+def test_buffered_exec_result_carries_the_raw_exec(make_client):
+    routes = {
+        ("POST", "/v1/sandboxes/sb-1/execs"): lambda r: httpx.Response(201, json=exec_payload()),
+        ("GET", "/v1/execs/ex-1/output"): lambda r: httpx.Response(
+            200,
+            content=sse(event("exit", {"state": "exited", "exit_code": 0, "truncated": False})),
+            headers={"content-type": "text/event-stream"},
+        ),
+    }
+    client, _ = make_client(routes)
+    sb = orcal.Sandbox._from_payload(client, sandbox_payload())
+    result = sb.exec("echo hi")
+    assert result.raw.id == "ex-1"
+    assert result.raw.command == ["sh", "-c", "echo hi"]
+
+
+def test_buffered_exec_result_carries_gaps(make_client):
+    stream_body = sse(
+        event("output", {"offset": 3, "stream": "stdout", "data": base64.b64encode(b"a").decode()}),
+        event("gap", {"offset": 4}),
+        event("exit", {"state": "exited", "exit_code": 0, "truncated": True}),
+    )
+    routes = {
+        ("POST", "/v1/sandboxes/sb-1/execs"): lambda r: httpx.Response(201, json=exec_payload()),
+        ("GET", "/v1/execs/ex-1/output"): lambda r: httpx.Response(
+            200, content=stream_body, headers={"content-type": "text/event-stream"}
+        ),
+    }
+    client, _ = make_client(routes)
+    sb = orcal.Sandbox._from_payload(client, sandbox_payload())
+    result = sb.exec("whatever")
+    assert result.gaps == [4]
+
+
+def test_iterating_a_stream_twice_does_not_duplicate_gaps(make_client):
+    stream_body = sse(
+        event("output", {"offset": 3, "stream": "stdout", "data": base64.b64encode(b"a").decode()}),
+        event("gap", {"offset": 4}),
+        event("exit", {"state": "exited", "exit_code": 0, "truncated": True}),
+    )
+    routes = {
+        ("POST", "/v1/sandboxes/sb-1/execs"): lambda r: httpx.Response(201, json=exec_payload()),
+        ("GET", "/v1/execs/ex-1/output"): lambda r: httpx.Response(
+            200, content=stream_body, headers={"content-type": "text/event-stream"}
+        ),
+    }
+    client, _ = make_client(routes)
+    sb = orcal.Sandbox._from_payload(client, sandbox_payload())
+    stream = sb.exec("whatever", stream=True)
+    list(stream)
+    list(stream)
+    assert stream.gaps == [4]
+
+
+def test_streaming_error_status_raises_the_mapped_error(make_client):
+    routes = {
+        ("POST", "/v1/sandboxes/sb-1/execs"): lambda r: httpx.Response(201, json=exec_payload()),
+        ("GET", "/v1/execs/ex-1/output"): lambda r: httpx.Response(
+            404, json={"error": {"code": "exec_not_found", "message": "no such exec", "details": {}}}
+        ),
+    }
+    client, _ = make_client(routes)
+    sb = orcal.Sandbox._from_payload(client, sandbox_payload())
+    stream = sb.exec("whatever", stream=True)
+    with pytest.raises(orcal.errors.ExecNotFound):
+        list(stream)

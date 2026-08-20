@@ -1,6 +1,7 @@
 import base64
 from dataclasses import dataclass, field
 
+from . import models
 from ._sse import SSEParser
 
 
@@ -18,6 +19,7 @@ class ExecResult:
     stderr: str
     exit_code: int | None
     truncated: bool
+    raw: models.Exec
     gaps: list[int] = field(default_factory=list)
 
 
@@ -32,6 +34,7 @@ class ExecStream:
         self.gaps = []
 
     def __iter__(self):
+        self.gaps = []
         parser = SSEParser()
         path = f"/v1/execs/{self._client._transport.escape(self.id)}/output"
         with self._client._transport.stream("GET", path, params={"from": self._from}) as response:
