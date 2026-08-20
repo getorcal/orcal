@@ -1,4 +1,5 @@
 from . import models
+from ._pagination import paginate
 from ._transport import Transport
 from .sandbox import Sandbox
 from .snapshot import Snapshot
@@ -48,3 +49,12 @@ class Orcal:
     def list_tokens(self):
         body = self._transport.request("GET", "/v1/tokens").json()
         return [models.Token(**item) for item in body.get("items", [])]
+
+    def sandboxes(self, **filters):
+        return paginate(self._transport, "/v1/sandboxes", filters, lambda item: Sandbox._from_payload(self, item))
+
+    def snapshots(self, **filters):
+        return paginate(self._transport, "/v1/snapshots", filters, lambda item: Snapshot._from_payload(self, item))
+
+    def events(self, **filters):
+        return paginate(self._transport, "/v1/events", filters, lambda item: models.Event(**item))

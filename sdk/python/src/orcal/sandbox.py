@@ -98,6 +98,44 @@ class Sandbox:
         ).json()
         return self._replace(payload)
 
+    def exec(self, command, *, stream=False, env=None, working_dir=None, user=None):
+        from .exec import ExecResult, ExecStream
+
+        argv = ["sh", "-c", command] if isinstance(command, str) else list(command)
+        body = {"command": argv}
+        if env:
+            body["env"] = env
+        if working_dir:
+            body["working_dir"] = working_dir
+        if user:
+            body["user"] = user
+        created = self._client._transport.request("POST", f"/v1/sandboxes/{self._ref()}/execs", json=body).json()
+        handle = ExecStream(self._client, created["id"])
+        if stream:
+            return handle
+        out = []
+        err = []
+        for frame in handle:
+            (out if frame.stream == "stdout" else err).append(frame.data)
+        return ExecResult(
+            id=handle.id,
+            stdout=b"".join(out).decode("utf-8", errors="replace"),
+            stderr=b"".join(err).decode("utf-8", errors="replace"),
+            exit_code=handle.exit_code,
+            truncated=handle.truncated,
+            gaps=list(handle.gaps),
+        )
+
+    def execs(self, **filters):
+        from ._pagination import paginate
+
+        return paginate(
+            self._client._transport,
+            f"/v1/sandboxes/{self._ref()}/execs",
+            filters,
+            lambda item: models.Exec(**item),
+        )
+
     def __enter__(self):
         return self
 
