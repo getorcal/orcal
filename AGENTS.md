@@ -178,14 +178,17 @@ Commit once per finished piece of work — not per file, not per edit. Never lan
 
 ## CI
 
-`.github/workflows/ci.yml` runs on pushes to `main` and on every pull request, as six independent jobs:
+`.github/workflows/ci.yml` runs on pushes to `main` and on every pull request, as nine independent jobs:
 
 * **lint** — `make lint` plus a `gofmt -l .` check
 * **generate** — `make verify-generate`, `go mod verify`, and `git diff --exit-code go.mod go.sum`
 * **test** — three-way matrix: ubuntu on go `1.25.0` (the declared floor, so a red here means the promised minimum is a lie), ubuntu on `1.25.x`, macos on `1.25.x`, each running vet, the suite, and the race suite
 * **integration** — the `docker`-tagged suite against the runner's daemon, with a 25 minute timeout, a skip guard, a pass guard, and a leaked-container check that runs even after failure
+* **gvisor** — the `docker`-tagged suite a second time against a runner with `runsc` installed, proving the optional runtime works rather than only that it is accepted
 * **image** — builds `deploy/Dockerfile` and asserts both binaries exist and are executable inside it
 * **vuln** — `govulncheck`, gating only on findings reachable from this project's own code, with accepted findings recorded in `.github/vuln-allowlist.txt` alongside written reasons; the job fails once an accepted finding gains a fix, so the allowlist expires itself
+* **sdk-python** — the Python client's unit suite on the declared 3.10 floor, plus a check that its generated models still match the spec
+* **sdk-typescript** — the TypeScript client's unit suite on a matrix of the declared Node 18 floor and current Node, plus a type check and a check that its generated types still match the spec
 
 Go installs with `check-latest: true` deliberately. Runners cache a patch that can trail the newest by one release, which is enough to fail the vulnerability gate over an advisory that was already fixed.
 

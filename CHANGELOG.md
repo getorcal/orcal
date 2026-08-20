@@ -41,6 +41,11 @@ Nothing has been released yet. Everything below is on `main` and unversioned.
   merge into an existing directory and never implicitly delete.
 - **Command-line client:** `orcal` covers the full API, with `--output json` on
   every command and Docker-compatible exit codes.
+- **Python and TypeScript SDKs:** Official clients covering every endpoint, with
+  typed errors, automatic pagination, and streaming exec output. A sandbox can
+  be used as a context manager so it is destroyed when the block ends, including
+  when the body raises. The TypeScript client has no runtime dependencies and
+  requires Node 18 or newer; the Python client requires 3.10 or newer.
 - **OpenAPI contract:** The API is defined by a hand-authored OpenAPI document
   that is the source of truth for the implementation, published for clients to
   generate against.

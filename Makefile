@@ -17,7 +17,7 @@ fmt:
 	golangci-lint fmt ./...
 
 generate-python:
-	cd sdk/python && python -m datamodel_code_generator \
+	cd sdk/python && python3 -m datamodel_code_generator \
 		--input ../../spec/openapi.yaml \
 		--input-file-type openapi \
 		--output src/orcal/models.py \
@@ -28,7 +28,7 @@ generate-python:
 		--disable-timestamp
 
 generate-ts:
-	cd sdk/typescript && npx --yes openapi-typescript ../../spec/openapi.yaml -o src/models.ts
+	cd sdk/typescript && npm exec --no -- openapi-typescript ../../spec/openapi.yaml -o src/models.ts
 
 generate: generate-python generate-ts
 	go generate ./...
