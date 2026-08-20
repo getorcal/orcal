@@ -1,4 +1,4 @@
-.PHONY: build test test-docker lint fmt generate verify-generate up down logs
+.PHONY: build test test-docker lint fmt generate generate-python verify-generate up down logs
 
 build:
 	go build -o bin/orcald ./cmd/orcald
@@ -16,11 +16,22 @@ lint:
 fmt:
 	golangci-lint fmt ./...
 
-generate:
+generate-python:
+	cd sdk/python && python -m datamodel_code_generator \
+		--input ../../spec/openapi.yaml \
+		--input-file-type openapi \
+		--output src/orcal/models.py \
+		--output-model-type dataclasses.dataclass \
+		--target-python-version 3.10 \
+		--use-standard-collections \
+		--use-union-operator \
+		--disable-timestamp
+
+generate: generate-python
 	go generate ./...
 
 verify-generate: generate
-	git diff --exit-code internal/apigen
+	git diff --exit-code internal/apigen sdk/python/src/orcal/models.py
 
 up:
 	docker compose -f deploy/docker-compose.yml up -d --build

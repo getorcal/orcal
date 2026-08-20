@@ -3,3 +3,6 @@
 /bin/
 .superpowers/
 .DS_Store
+sdk/python/.venv/
+sdk/python/**/__pycache__/
+sdk/python/.pytest_cache/
