@@ -102,3 +102,14 @@ def test_sandbox_execs_paginates(make_client):
     client, _ = make_client(routes)
     sb = orcal.Sandbox._from_payload(client, sandbox_payload())
     assert [ex.id for ex in sb.execs()] == ["ex-1", "ex-2"]
+
+
+def test_sandbox_snapshots_paginates(make_client):
+    routes = {
+        ("GET", "/v1/sandboxes/sb-1/snapshots"): lambda r: httpx.Response(
+            200, json={"items": [snapshot_payload("sn-1"), snapshot_payload("sn-2")]}
+        )
+    }
+    client, _ = make_client(routes)
+    sb = orcal.Sandbox._from_payload(client, sandbox_payload())
+    assert [sn.id for sn in sb.snapshots()] == ["sn-1", "sn-2"]

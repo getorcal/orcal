@@ -56,6 +56,29 @@ def test_sandbox_is_destroyed_when_the_body_raises(live, image):
 
 
 def test_listing_sandboxes_paginates(live, image):
-    with live.sandbox(image=image), live.sandbox(image=image):
+    with live.sandbox(image=image) as a, live.sandbox(image=image) as b:
         ids = [sb.id for sb in live.sandboxes()]
         assert len(ids) == len(set(ids))
+        assert a.id in ids
+        assert b.id in ids
+
+
+def test_forks_of_the_same_snapshot_are_independently_writable(live, image):
+    with live.sandbox(image=image) as sb:
+        sb.files.write("/app/marker.txt", "original")
+        snap = sb.snapshot(name=f"v-{uuid.uuid4().hex[:8]}")
+
+    fork_a = snap.fork()
+    fork_b = snap.fork()
+    try:
+        fork_a.files.write("/app/branch.txt", "a")
+        fork_b.files.write("/app/branch.txt", "b")
+
+        assert fork_a.files.read("/app/branch.txt") == b"a"
+        assert fork_b.files.read("/app/branch.txt") == b"b"
+        assert fork_a.files.read("/app/marker.txt") == b"original"
+        assert fork_b.files.read("/app/marker.txt") == b"original"
+    finally:
+        fork_a.destroy()
+        fork_b.destroy()
+        snap.delete()

@@ -102,3 +102,29 @@ def test_sandbox_ref_is_escaped_in_the_path(make_client):
     client, _ = make_client({("GET", "/v1/sandboxes/a%2Fb"): get})
     client.get_sandbox("a/b")
     assert seen["path"] == "/v1/sandboxes/a%2Fb"
+
+
+def test_healthz_gets_the_status(make_client):
+    routes = {("GET", "/v1/healthz"): lambda r: httpx.Response(200, json={"status": "ok"})}
+    client, recorder = make_client(routes)
+    assert client.healthz() == {"status": "ok"}
+    assert recorder.calls == [("GET", "/v1/healthz", b"")]
+
+
+def test_get_exec_fetches_by_id(make_client):
+    exec_payload = {
+        "id": "ex-1",
+        "sandbox_id": "sb-1",
+        "command": ["sh", "-c", "echo hi"],
+        "state": "exited",
+        "output_bytes": 2,
+        "truncated": False,
+        "started_at": "2026-08-20T10:00:00Z",
+        "exit_code": 0,
+    }
+    routes = {("GET", "/v1/execs/ex-1"): lambda r: httpx.Response(200, json=exec_payload)}
+    client, recorder = make_client(routes)
+    ex = client.get_exec("ex-1")
+    assert ex.id == "ex-1"
+    assert ex.exit_code == 0
+    assert recorder.calls == [("GET", "/v1/execs/ex-1", b"")]
