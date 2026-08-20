@@ -36,4 +36,8 @@ await client.withSandbox({ image: "python:3.12-slim" }, async (sb) => {
 
 A string command runs through a shell as `sh -c`; pass an array for exact argv.
 
+`sb.files.list(path)` returns the entries as an array carrying a `truncated`
+flag, which is `true` when the daemon capped the listing and the result is
+incomplete.
+
 Zero runtime dependencies. Requires Node 18 or newer.

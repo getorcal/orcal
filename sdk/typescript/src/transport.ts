@@ -11,7 +11,7 @@ export interface TransportOptions {
 export interface RequestOptions {
   params?: Record<string, string | number | undefined>;
   body?: unknown;
-  raw?: BodyInit;
+  raw?: Uint8Array | string;
   headers?: Record<string, string>;
 }
 
@@ -50,7 +50,7 @@ export class Transport {
 
   private init(method: string, options: RequestOptions): RequestInit {
     const headers: Record<string, string> = { authorization: `Bearer ${this.token}`, ...(options.headers ?? {}) };
-    let body: BodyInit | undefined;
+    let body: RequestInit["body"];
     if (options.raw !== undefined) {
       body = options.raw;
     } else if (options.body !== undefined) {

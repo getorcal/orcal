@@ -27,7 +27,24 @@ const sandboxPayload = {
   updated_at: "x",
 };
 
-function harness(streamBody: string | number, onCreate?: (init: RequestInit) => void) {
+function cancellableStream(chunks: string[]) {
+  const state = { cancelled: false };
+  const pending = [...chunks];
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      const next = pending.shift();
+      if (next === undefined) controller.close();
+      else controller.enqueue(encoder.encode(next));
+    },
+    cancel() {
+      state.cancelled = true;
+    },
+  });
+  return { stream, state };
+}
+
+function harness(streamBody: string | number | ReadableStream<Uint8Array>, onCreate?: (init: RequestInit) => void) {
   const impl = (async (input: string | URL, init: RequestInit = {}) => {
     const url = new URL(String(input));
     if (url.pathname === "/v1/sandboxes/sb-1/execs") {
@@ -149,6 +166,43 @@ test("iterating a stream twice does not duplicate gaps", async () => {
     void _;
   }
   assert.deepEqual(stream.gaps, [4]);
+});
+
+test("breaking out of a stream early cancels the response body", async () => {
+  const { stream, state } = cancellableStream([
+    evt("output", { offset: 3, stream: "stdout", data: b64("a") }),
+    evt("output", { offset: 6, stream: "stdout", data: b64("b") }),
+    evt("exit", { state: "exited", exit_code: 0, truncated: false }),
+  ]);
+  const sb = harness(stream);
+  const execStream = await sb.exec("whatever", { stream: true });
+  for await (const frame of execStream) {
+    void frame;
+    break;
+  }
+  assert.equal(state.cancelled, true, "an abandoned stream must cancel its reader and release the response body");
+});
+
+test("a buffered exec releases the response body once the exit frame arrives", async () => {
+  const { stream, state } = cancellableStream([
+    evt("output", { offset: 3, stream: "stdout", data: b64("a") }),
+    evt("exit", { state: "exited", exit_code: 0, truncated: false }),
+    evt("output", { offset: 9, stream: "stdout", data: b64("never") }),
+  ]);
+  const sb = harness(stream);
+  await sb.exec("whatever");
+  assert.equal(state.cancelled, true);
+});
+
+test("a buffered exec result carries the created exec record", async () => {
+  const sb = harness(evt("exit", { state: "exited", exit_code: 0, truncated: false }));
+  const result = await sb.exec("echo hi");
+  assert.equal(result.raw.id, "ex-1");
+  assert.equal(result.raw.sandbox_id, "sb-1");
+  assert.deepEqual(result.raw.command, ["sh"]);
+  assert.equal(result.raw.state, "running");
+  assert.equal(result.raw.started_at, "2026-08-20T10:00:00Z");
+  assert.equal(result.raw.output_bytes, 0);
 });
 
 test("streaming error status raises the mapped error", async () => {

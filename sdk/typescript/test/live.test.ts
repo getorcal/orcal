@@ -84,18 +84,15 @@ test("the sandbox is destroyed when the body throws", async () => {
 });
 
 test("listing sandboxes paginates", async () => {
-  const a = await client.sandbox({ image });
-  const b = await client.sandbox({ image });
-  try {
-    const ids: string[] = [];
-    for await (const sb of client.sandboxes()) ids.push(sb.id);
-    assert.equal(new Set(ids).size, ids.length);
-    assert.ok(ids.includes(a.id), "listing did not surface the sandbox created for this test");
-    assert.ok(ids.includes(b.id), "listing did not surface the second sandbox created for this test");
-  } finally {
-    await a.destroy();
-    await b.destroy();
-  }
+  await client.withSandbox({ image }, (a) =>
+    client.withSandbox({ image }, async (b) => {
+      const ids: string[] = [];
+      for await (const sb of client.sandboxes()) ids.push(sb.id);
+      assert.equal(new Set(ids).size, ids.length);
+      assert.ok(ids.includes(a.id), "listing did not surface the sandbox created for this test");
+      assert.ok(ids.includes(b.id), "listing did not surface the second sandbox created for this test");
+    }),
+  );
 });
 
 test("forks of the same snapshot are independently writable", async () => {
@@ -106,20 +103,20 @@ test("forks of the same snapshot are independently writable", async () => {
   });
 
   const snap = await client.getSnapshot(snapshotId);
-  const forkA = await snap.fork();
-  const forkB = await snap.fork();
   const decoder = new TextDecoder();
   try {
-    await forkA.files.write("/app/branch.txt", "a");
-    await forkB.files.write("/app/branch.txt", "b");
+    await snap.withFork((forkA) =>
+      snap.withFork(async (forkB) => {
+        await forkA.files.write("/app/branch.txt", "a");
+        await forkB.files.write("/app/branch.txt", "b");
 
-    assert.equal(decoder.decode(await forkA.files.read("/app/branch.txt")), "a");
-    assert.equal(decoder.decode(await forkB.files.read("/app/branch.txt")), "b");
-    assert.equal(decoder.decode(await forkA.files.read("/app/marker.txt")), "original");
-    assert.equal(decoder.decode(await forkB.files.read("/app/marker.txt")), "original");
+        assert.equal(decoder.decode(await forkA.files.read("/app/branch.txt")), "a");
+        assert.equal(decoder.decode(await forkB.files.read("/app/branch.txt")), "b");
+        assert.equal(decoder.decode(await forkA.files.read("/app/marker.txt")), "original");
+        assert.equal(decoder.decode(await forkB.files.read("/app/marker.txt")), "original");
+      }),
+    );
   } finally {
-    await forkA.destroy();
-    await forkB.destroy();
     await snap.delete();
   }
 });

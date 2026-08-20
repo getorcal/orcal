@@ -1,5 +1,6 @@
 import { SSEParser } from "./sse.js";
 import type { Transport } from "./transport.js";
+import type { Exec as ExecModel } from "./types.js";
 
 export interface Frame {
   offset: number;
@@ -13,6 +14,7 @@ export interface ExecResult {
   stderr: string;
   exitCode: number | null;
   truncated: boolean;
+  raw: ExecModel;
   gaps: number[];
 }
 
@@ -57,35 +59,39 @@ export class ExecStream implements AsyncIterable<Frame> {
     });
     const reader = response.body?.getReader();
     if (!reader) return;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) return;
-      for (const [name, payload] of parser.feed(value)) {
-        if (name === "output") {
-          const offset = payload.offset as number;
-          this.from = offset;
-          yield {
-            offset,
-            stream: (payload.stream as string) ?? "stdout",
-            data: decodeBase64(payload.data as string),
-          };
-        } else if (name === "gap") {
-          const offset = payload.offset as number;
-          this.from = offset;
-          this.gaps.push(offset);
-        } else if (name === "exit") {
-          this.state = (payload.state as string) ?? null;
-          this.exitCode = (payload.exit_code as number | null) ?? null;
-          this.truncated = Boolean(payload.truncated);
-          return;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) return;
+        for (const [name, payload] of parser.feed(value)) {
+          if (name === "output") {
+            const offset = payload.offset as number;
+            this.from = offset;
+            yield {
+              offset,
+              stream: (payload.stream as string) ?? "stdout",
+              data: decodeBase64(payload.data as string),
+            };
+          } else if (name === "gap") {
+            const offset = payload.offset as number;
+            this.from = offset;
+            this.gaps.push(offset);
+          } else if (name === "exit") {
+            this.state = (payload.state as string) ?? null;
+            this.exitCode = (payload.exit_code as number | null) ?? null;
+            this.truncated = Boolean(payload.truncated);
+            return;
+          }
         }
       }
+    } finally {
+      await reader.cancel();
     }
   }
 }
 
-export async function collectExec(transport: Transport, execId: string): Promise<ExecResult> {
-  const stream = new ExecStream(transport, execId);
+export async function collectExec(transport: Transport, raw: ExecModel): Promise<ExecResult> {
+  const stream = new ExecStream(transport, raw.id);
   const out: Uint8Array[] = [];
   const err: Uint8Array[] = [];
   for await (const frame of stream) {
@@ -98,6 +104,7 @@ export async function collectExec(transport: Transport, execId: string): Promise
     stderr: decoder.decode(concatBytes(err)),
     exitCode: stream.exitCode,
     truncated: stream.truncated,
+    raw,
     gaps: [...stream.gaps],
   };
 }

@@ -13,7 +13,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "test": "node --import tsx --test test/*.test.ts",
-    "test:unit": "node --import tsx --test test/transport.test.ts test/errors.test.ts test/sse.test.ts test/client.test.ts test/pagination.test.ts test/coverage.test.ts"
+    "test:unit": "node --import tsx --test test/transport.test.ts test/errors.test.ts test/sse.test.ts test/client.test.ts test/exec.test.ts test/pagination.test.ts test/types.test.ts test/coverage.test.ts"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",

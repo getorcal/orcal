@@ -4,6 +4,14 @@ import { Snapshot } from "./snapshot.js";
 import { collectExec, ExecStream, type ExecOptions, type ExecResult } from "./exec.js";
 import { paginate } from "./pagination.js";
 
+export class FileListing extends Array<FileInfo> {
+  truncated = false;
+
+  static get [Symbol.species](): ArrayConstructor {
+    return Array;
+  }
+}
+
 export class SandboxFiles {
   constructor(
     private readonly transport: Transport,
@@ -25,7 +33,7 @@ export class SandboxFiles {
 
   async write(path: string, content: string | Uint8Array): Promise<void> {
     const raw = typeof content === "string" ? new TextEncoder().encode(content) : content;
-    await this.transport.request("PUT", this.path(), { params: { path }, raw: raw as BodyInit });
+    await this.transport.request("PUT", this.path(), { params: { path }, raw });
   }
 
   async stat(path: string): Promise<FileInfo> {
@@ -33,10 +41,13 @@ export class SandboxFiles {
     return (await response.json()) as FileInfo;
   }
 
-  async list(path: string): Promise<FileInfo[]> {
+  async list(path: string): Promise<FileListing> {
     const response = await this.transport.request("GET", this.path("/list"), { params: { path } });
     const body = (await response.json()) as FileList;
-    return body.items ?? [];
+    const listing = new FileListing();
+    for (const item of body.items ?? []) listing.push(item);
+    listing.truncated = Boolean(body.truncated);
+    return listing;
   }
 
   async download(path: string): Promise<Uint8Array> {
@@ -45,7 +56,7 @@ export class SandboxFiles {
   }
 
   async upload(path: string, tar: Uint8Array): Promise<void> {
-    await this.transport.request("PUT", this.archive(), { params: { path }, raw: tar as BodyInit });
+    await this.transport.request("PUT", this.archive(), { params: { path }, raw: tar });
   }
 }
 
@@ -133,7 +144,7 @@ export class Sandbox {
     const response = await this.transport.request("POST", `/v1/sandboxes/${this.ref()}/execs`, { body });
     const created = (await response.json()) as ExecModel;
     if (options.stream) return new ExecStream(this.transport, created.id);
-    return collectExec(this.transport, created.id);
+    return collectExec(this.transport, created);
   }
 
   execs(filters: Record<string, string | number | undefined> = {}): AsyncGenerator<ExecModel> {

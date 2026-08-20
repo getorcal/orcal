@@ -104,6 +104,68 @@ test("withSandbox surfaces a cleanup failure even when the body succeeds", async
   );
 });
 
+const exhausted = () =>
+  new Response(JSON.stringify({ error: { code: "resource_exhausted", message: "no room", details: {} } }), { status: 429 });
+
+test("nested withSandbox destroys the first sandbox when the second creation fails", async () => {
+  let created = 0;
+  const { impl, calls } = router({
+    "POST /v1/sandboxes": () => {
+      created += 1;
+      return created === 1 ? ok(sandboxPayload("sb-1"), 201) : exhausted();
+    },
+    "DELETE /v1/sandboxes/sb-1": () => ok({ ...sandboxPayload("sb-1"), state: "destroyed" }),
+  });
+  const c = client(impl);
+  await assert.rejects(
+    () => c.withSandbox({ image: "alpine:3.20" }, () => c.withSandbox({ image: "alpine:3.20" }, async () => undefined)),
+    /no room/,
+  );
+  assert.ok(
+    calls.includes("DELETE /v1/sandboxes/sb-1"),
+    "the first sandbox must be destroyed when the second creation fails",
+  );
+});
+
+test("nested withFork destroys the first fork when the second fork fails", async () => {
+  let forked = 0;
+  const { impl, calls } = router({
+    "POST /v1/sandboxes": () => {
+      forked += 1;
+      return forked === 1 ? ok(sandboxPayload("sb-2"), 201) : exhausted();
+    },
+    "DELETE /v1/sandboxes/sb-2": () => ok({ ...sandboxPayload("sb-2"), state: "destroyed" }),
+  });
+  const c = client(impl);
+  const snapshot = new Snapshot(c.transport, snapshotPayload(), (opts) => c.sandbox(opts as never));
+  await assert.rejects(
+    () => snapshot.withFork(() => snapshot.withFork(async () => undefined)),
+    /no room/,
+  );
+  assert.ok(calls.includes("DELETE /v1/sandboxes/sb-2"), "the first fork must be destroyed when the second fork fails");
+});
+
+test("nested withSandbox destroys the first sandbox even when the second cleanup fails", async () => {
+  let created = 0;
+  const { impl, calls } = router({
+    "POST /v1/sandboxes": () => {
+      created += 1;
+      return created === 1 ? ok(sandboxPayload("sb-1"), 201) : ok(sandboxPayload("sb-2"), 201);
+    },
+    "DELETE /v1/sandboxes/sb-2": () => cleanupFailure("second cleanup blew up"),
+    "DELETE /v1/sandboxes/sb-1": () => ok({ ...sandboxPayload("sb-1"), state: "destroyed" }),
+  });
+  const c = client(impl);
+  await assert.rejects(
+    () => c.withSandbox({ image: "alpine:3.20" }, () => c.withSandbox({ image: "alpine:3.20" }, async () => undefined)),
+    /second cleanup blew up/,
+  );
+  assert.ok(
+    calls.includes("DELETE /v1/sandboxes/sb-1"),
+    "a failing inner cleanup must not strand the outer sandbox",
+  );
+});
+
 test("network none is sent and reported", async () => {
   let body = "";
   const { impl } = router({
@@ -419,6 +481,45 @@ test("files.list unwraps items and returns empty when absent", async () => {
   const items = await sb.files.list("/");
   assert.equal(items.length, 1);
   assert.equal(items[0].name, "a.txt");
+});
+
+const fileEntry = (name: string) => ({ name, size: 1, mode: "0644", mtime: "2026-08-20T10:00:00Z", is_dir: false });
+
+const listRoute = (payload: unknown) => router({ "GET /v1/sandboxes/sb-1/files/list": () => ok(payload) });
+
+test("files.list reports a truncated listing rather than looking complete", async () => {
+  const { impl } = listRoute({ items: [fileEntry("a.txt")], truncated: true });
+  const sb = client(impl)._fromPayload(sandboxPayload());
+  const listing = await sb.files.list("/");
+  assert.equal(listing.truncated, true);
+  assert.equal(listing.length, 1);
+});
+
+test("files.list reports a complete listing as complete", async () => {
+  const { impl } = listRoute({ items: [fileEntry("a.txt")], truncated: false });
+  const sb = client(impl)._fromPayload(sandboxPayload());
+  assert.equal((await sb.files.list("/")).truncated, false);
+});
+
+test("files.list returns an empty listing when items is absent", async () => {
+  const { impl } = listRoute({ truncated: false });
+  const sb = client(impl)._fromPayload(sandboxPayload());
+  const listing = await sb.files.list("/");
+  assert.deepEqual(Array.from(listing), []);
+  assert.equal(listing.truncated, false);
+});
+
+test("a file listing behaves like an array", async () => {
+  const { impl } = listRoute({ items: [fileEntry("a.txt"), fileEntry("b.txt")], truncated: true });
+  const sb = client(impl)._fromPayload(sandboxPayload());
+  const listing = await sb.files.list("/");
+  assert.ok(Array.isArray(listing));
+  assert.deepEqual(
+    listing.map((entry) => entry.name),
+    ["a.txt", "b.txt"],
+  );
+  assert.deepEqual([...listing].length, 2);
+  assert.equal(listing.filter((entry) => entry.name === "a.txt").length, 1);
 });
 
 test("files.download reads the archive endpoint and returns bytes", async () => {
